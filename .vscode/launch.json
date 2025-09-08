@@ -1,0 +1,59 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Windows Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Release/Particlefront.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Configure and Build (Windows)",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "macOS Release",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Particlefront",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Configure and Build (macOS)",
+            "stopAtEntry": false,
+            "environment": [
+                {
+                    "name": "DYLD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/bin/lib:/usr/local/lib"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "osx": {
+                "MIMode": "lldb"
+            }
+        },
+        {
+            "name": "Linux Release",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/Particlefront",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Configure and Build (Linux)",
+            "stopAtEntry": false,
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/bin/lib:/usr/lib:/usr/local/lib"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "linux": {
+                "MIMode": "gdb"
+            }
+        }
+    ]
+}
