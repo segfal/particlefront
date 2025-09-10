@@ -42,8 +42,7 @@ if(IS_WINDOWS)
 endif()
 
 set(SOURCES
-    src/main.cpp
-    src/simulator.cpp
+    src/**/*.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -77,12 +76,12 @@ if(NOT GLSLC_EXECUTABLE)
     message(FATAL_ERROR "glslc not found! Please install Vulkan SDK.")
 endif()
 
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/src/shaders/compiled)
+file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/src/assets/shaders/compiled)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-    "${CMAKE_SOURCE_DIR}/src/shaders/glsl/*.frag"
-    "${CMAKE_SOURCE_DIR}/src/shaders/glsl/*.vert"
-    "${CMAKE_SOURCE_DIR}/src/shaders/glsl/*.comp"
+    "${CMAKE_SOURCE_DIR}/src/assets/shaders/glsl/*.frag"
+    "${CMAKE_SOURCE_DIR}/src/assets/shaders/glsl/*.vert"
+    "${CMAKE_SOURCE_DIR}/src/assets/shaders/glsl/*.comp"
 )
 
 set(SPIRV_BINARY_FILES)
