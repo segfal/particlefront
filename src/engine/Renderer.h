@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 namespace engine {
 
@@ -20,12 +21,19 @@ public:
         bool vsync = true;
         bool debugContext = false;
     };
-    static Renderer& Get();
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
     Renderer();
     ~Renderer();
+
+    static Renderer* getInstance();
+
+    void createTextureImage(int width, int height, unsigned char* imageBuffer, VkImage& textureImage, VkDeviceMemory& textureImageMemory, VkFormat format);
+
+    VkImageView createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags);
+    
+    void createTextureImageView(VkFormat textureFormat, VkImage textureImage, VkImageView &textureImageView);
 
     void run();
 };

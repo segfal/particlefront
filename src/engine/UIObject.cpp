@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <map>
+#include "Image.h"
 
 class UIObject {
 private:
@@ -11,31 +12,21 @@ private:
     glm::vec2 position;
     glm::vec2 size;
     glm::ivec2 corner;
-    VkImage texture;
-    VkImageView textureView;
-    VkDeviceMemory textureMemory;
-    VkSampler textureSampler;
-    VkFormat format;
+    std::string texture;
     std::map<std::string, UIObject*> children;
+friend class TextObject;
 public:
     UIObject(glm::vec2 position,
              glm::vec2 size,
              glm::ivec2 corner,
              std::string name,
-             VkImage texture,
-             VkImageView textureView,
-             VkDeviceMemory textureMemory,
-             VkSampler textureSampler,
-             VkFormat format)
+             std::string texture)
         : name(std::move(name)),
           position(position),
           size(size),
           corner(corner),
-          texture(texture),
-          textureView(textureView),
-          textureMemory(textureMemory),
-          textureSampler(textureSampler),
-          format(format) {}
+          texture(std::move(texture)) {
+    }
 
     ~UIObject() {
         for (auto &entry : children) {
