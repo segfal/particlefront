@@ -23,12 +23,12 @@ struct Font {
     std::map<char, Character> characters;
 };
 
-class TextManager : public UIManager {
+class FontManager : public UIManager {
 public:
-    TextManager() {
+    FontManager() {
         renderer = engine::Renderer::getInstance();
     }
-    ~TextManager();
+    ~FontManager();
 
     void loadFont(const std::string& fontPath, const std::string& fontName, int fontSize) {
         FT_Library ft;

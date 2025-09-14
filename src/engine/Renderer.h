@@ -35,6 +35,8 @@ public:
     
     void createTextureImageView(VkFormat textureFormat, VkImage textureImage, VkImageView &textureImageView);
 
+    void overwriteUIManager(class UIManager* uiManager);
+
     void run();
 };
 }

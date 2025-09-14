@@ -4,7 +4,9 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <map>
+#include <variant>
 #include "Image.h"
+#include "TextObject.cpp"
 
 class UIObject {
 private:
@@ -13,7 +15,7 @@ private:
     glm::vec2 size;
     glm::ivec2 corner;
     std::string texture;
-    std::map<std::string, UIObject*> children;
+    std::map<std::string, std::variant<UIObject*, TextObject*>> children;
 friend class TextObject;
 public:
     UIObject(glm::vec2 position,
@@ -30,7 +32,7 @@ public:
 
     ~UIObject() {
         for (auto &entry : children) {
-            delete entry.second;
+            std::visit([](auto* child) { delete child; }, entry.second);
         }
     }
 
@@ -42,10 +44,13 @@ public:
     void addChild(UIObject *child) {
         children[child->getName()] = child;
     }
+    void addChild(TextObject *child) {
+        children[child->getName()] = child;
+    }
     void removeChild(UIObject *child) {
         auto it = children.find(child->getName());
         if (it != children.end()) {
-            delete it->second;
+            std::visit([](auto* child) { delete child; }, it->second);
             children.erase(it);
         }
     }
