@@ -1,6 +1,8 @@
+#pragma once
 #include <unordered_map>
 #include <string>
 #include <vulkan/vulkan.h>
+#include <vector>
 #include "Renderer.cpp"
 
 struct  Shader {
@@ -10,6 +12,8 @@ struct  Shader {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkDescriptorSetLayout descriptorSetLayout;
+    int vertexBitBindings = 1;
+    int fragmentBitBindings = 4;
 };
 
 class ShaderManager {
@@ -20,14 +24,14 @@ public:
     ShaderManager(std::vector<Shader*>& shaders) {
         renderer = Renderer::getInstance();
         for (auto& shader : shaders) {
-            loadShader(shader->name, shader->vertexPath, shader->fragmentPath);
+            loadShader(shader->name, shader->vertexPath, shader->fragmentPath, shader->vertexBitBindings, shader->fragmentBitBindings);
         }
     }
     ~ShaderManager();
     Shader& getShader(const std::string& name) {
         return shaders[name];
     }
-    void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings = 1, int fragmentBitBindings = 4) {
+    void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings) {
         Shader shader;
         shader.name = name;
         shader.vertexPath = vertexPath;
@@ -42,16 +46,15 @@ public:
                 .name = "pbr",
                 .vertexPath = "src/assets/shaders/compiled/pbr.vert.spv",
                 .fragmentPath = "src/assets/shaders/compiled/pbr.frag.spv",
-            },
-            new Shader{
-                .name = "text",
-                .vertexPath = "src/assets/shaders/compiled/text.vert.spv",
-                .fragmentPath = "src/assets/shaders/compiled/text.frag.spv",
+                .vertexBitBindings = 1,
+                .fragmentBitBindings = 4,
             },
             new Shader{
                 .name = "ui",
                 .vertexPath = "src/assets/shaders/compiled/ui.vert.spv",
                 .fragmentPath = "src/assets/shaders/compiled/ui.frag.spv",
+                .vertexBitBindings = 1,
+                .fragmentBitBindings = 1,
             },
         };
         static ShaderManager instance(defaultShaders);

@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
-#include "Renderer.h"
+#include "Renderer.cpp"
 #include "Image.h"
 #include "UIManager.cpp"
 
@@ -26,7 +26,7 @@ struct Font {
 class FontManager : public UIManager {
 public:
     FontManager() {
-        renderer = engine::Renderer::getInstance();
+        renderer = Renderer::getInstance();
     }
     ~FontManager();
 
@@ -64,5 +64,5 @@ public:
     }
 private:
     std::map<std::string, Font> fonts;
-    engine::Renderer* renderer;
+    Renderer* renderer;
 };

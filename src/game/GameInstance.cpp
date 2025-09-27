@@ -2,16 +2,16 @@
 #include "../engine/UIObject.cpp"
 #include "../engine/TextObject.cpp"
 #include "../engine/FontManager.cpp"
-#include "../engine/Renderer.h"
+#include "../engine/Renderer.cpp"
 
 class GameInstance {
 private:
     UIManager* uiManager;
     FontManager* fontManager;
-    engine::Renderer* renderer;
+    Renderer* renderer;
 public:
     GameInstance() {
-        renderer = engine::Renderer::getInstance();
+        renderer = Renderer::getInstance();
     }
     ~GameInstance() {
         delete uiManager;
