@@ -14,7 +14,11 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <set>
-#include <bits/stdc++.h>
+#include <map>
+#include <cstdint>
+#include <limits>
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <optional>
 #include <fstream>

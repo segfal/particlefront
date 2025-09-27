@@ -42,8 +42,13 @@ if(IS_WINDOWS)
 endif()
 
 set(SOURCES
-    src/**/*.cpp
+    src/main.cpp
 )
+
+file(GLOB_RECURSE ENGINE_SOURCES "src/engine/*.cpp")
+file(GLOB_RECURSE GAME_SOURCES "src/game/*.cpp")
+
+list(APPEND SOURCES ${ENGINE_SOURCES} ${GAME_SOURCES})
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
