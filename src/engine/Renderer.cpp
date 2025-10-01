@@ -24,6 +24,8 @@
 #include <fstream>
 #include "UIManager.cpp"
 #include "ShaderManager.cpp"
+#include "FontManager.cpp"
+#include "TextureManager.cpp"
 #include "../utils.cpp"
 
 const uint32_t WIDTH = 800;
@@ -155,9 +157,6 @@ public:
         mainLoop();
         cleanup();
     }
-    void overwriteUIManager(class UIManager* uiManager) {
-        this->uiManager = uiManager;
-    }
     VkCommandBuffer beginSingleTimeCommands() {
         VkCommandBufferAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -235,7 +234,7 @@ public:
         }
         return shaderModule;
     }
-    void createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout) {
+    void createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange = nullptr) {
         std::vector<char> vertShaderCode = readFile(vertexShaderPath);
         std::vector<char> fragShaderCode = readFile(fragmentShaderPath);
         VkShaderModule vertexShader = createShaderModule(vertShaderCode);
@@ -351,10 +350,10 @@ public:
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
             .pSetLayouts = &descriptorSetLayout,
-            .pushConstantRangeCount = 0,
-            .pPushConstantRanges = nullptr,
+            .pushConstantRangeCount = pushConstantRange ? 1 : 0,
+            .pPushConstantRanges = pushConstantRange,
         };
-        if(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
         VkGraphicsPipelineCreateInfo pipelineInfo = {
@@ -375,13 +374,13 @@ public:
             .basePipelineHandle = VK_NULL_HANDLE,
             .basePipelineIndex = -1,
         };
-        if(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
         vkDestroyShaderModule(device, fragmentShader, nullptr);
         vkDestroyShaderModule(device, vertexShader, nullptr);
     }
-    void createDescriptorSetLayout(int vertexBitBindings, int fragmentBitBindings, VkDescriptorSetLayout &descriptorSetLayout) {
+    void createDescriptorSetLayout(int vertexBitBindings, int fragmentBitBindings, VkDescriptorSetLayout& descriptorSetLayout) {
         uint32_t i = 0;
         std::vector<VkDescriptorSetLayoutBinding> bindings;
         for (; i < vertexBitBindings; ++i) {
@@ -397,7 +396,7 @@ public:
         for (; i < vertexBitBindings + fragmentBitBindings; ++i) {
             VkDescriptorSetLayoutBinding fragmentLayoutBinding = {
                 .binding = i,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
@@ -409,8 +408,34 @@ public:
             .bindingCount = static_cast<uint32_t>(bindings.size()),
             .pBindings = bindings.data(),
         };
-        if(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor set layout!");
+        }
+    }
+    void createDescriptorPool(int vertexBitBindings, int fragmentBitBindings, VkDescriptorPool &descriptorPool, int multiplier = 1) {
+        std::vector<VkDescriptorPoolSize> poolSizes;
+        if (vertexBitBindings > 0) {
+            VkDescriptorPoolSize vertexPoolSize = {
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = static_cast<uint32_t>(vertexBitBindings * MAX_FRAMES_IN_FLIGHT * multiplier),
+            };
+            poolSizes.push_back(vertexPoolSize);
+        }
+        if (fragmentBitBindings > 0) {
+            VkDescriptorPoolSize fragmentPoolSize = {
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = static_cast<uint32_t>(fragmentBitBindings * MAX_FRAMES_IN_FLIGHT * multiplier),
+            };
+            poolSizes.push_back(fragmentPoolSize);
+        }
+        VkDescriptorPoolCreateInfo poolInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+            .pPoolSizes = poolSizes.data(),
+            .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+        };
+        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create descriptor pool!");
         }
     }
     void createTextureImageView(VkFormat textureFormat, VkImage textureImage, VkImageView &textureImageView) {
@@ -592,9 +617,15 @@ private:
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
-    UIManager* uiManager = nullptr;
+    VkBuffer quadVertexBuffer;
+    VkDeviceMemory quadVertexBufferMemory;
+    VkBuffer quadIndexBuffer;
+    VkDeviceMemory quadIndexBufferMemory;
+    std::unique_ptr<UIManager> uiManager = nullptr;
+    std::unique_ptr<FontManager> fontManager = nullptr;
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    ShaderManager* shaderManager = nullptr;
+    std::unique_ptr<ShaderManager> shaderManager = nullptr;
+    std::unique_ptr<TextureManager> textureManager = nullptr;
     bool framebufferResized = false;
     bool firstMouse = true;
     float uiScale = 1.0f;
@@ -633,12 +664,16 @@ private:
         createSwapChain();
         createImageViews();
         createRenderPass();
+        setupUI();
         shaderManager = ShaderManager::getInstance();
         createCommandPool();
         createColorResources();
         createDepthResources();
         createFramebuffers();
         createTextureSampler();
+        textureManager = TextureManager::getInstance();
+        createQuadBuffers();
+
     }
     void mainLoop() {
         while(!glfwWindowShouldClose(window)) {
@@ -940,6 +975,85 @@ private:
         };
         if(vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create command pool!");
+        }
+    }
+    void createQuadBuffers() {
+        std::vector<Vertex> vertices = {
+            {{-1.0f, -1.0f}, {0.0f, 0.0f}},
+            {{ 1.0f, -1.0f}, {1.0f, 0.0f}},
+            {{ 1.0f,  1.0f}, {1.0f, 1.0f}},
+            {{-1.0f,  1.0f}, {0.0f, 1.0f}},
+        };
+        std::vector<uint32_t> indices = {
+            0, 1, 2, 2, 3, 0
+        };
+        VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
+        VkDeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
+        VkBuffer stagingVertexBuffer;
+        VkDeviceMemory stagingVertexBufferMemory;
+        createBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingVertexBuffer, stagingVertexBufferMemory);
+        void* data;
+        vkMapMemory(device, stagingVertexBufferMemory, 0, vertexBufferSize, 0, &data);
+        memcpy(data, vertices.data(), (size_t) vertexBufferSize);
+        vkUnmapMemory(device, stagingVertexBufferMemory);
+        createBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, quadVertexBuffer, quadVertexBufferMemory);
+        copyBuffer(stagingVertexBuffer, quadVertexBuffer, vertexBufferSize);
+        vkDestroyBuffer(device, stagingVertexBuffer, nullptr);
+        vkFreeMemory(device, stagingVertexBufferMemory, nullptr);
+        VkBuffer stagingIndexBuffer;
+        VkDeviceMemory stagingIndexBufferMemory;
+        createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingIndexBuffer, stagingIndexBufferMemory);
+        vkMapMemory(device, stagingIndexBufferMemory, 0, indexBufferSize, 0, &data);
+        memcpy(data, indices.data(), (size_t) indexBufferSize);
+        vkUnmapMemory(device, stagingIndexBufferMemory);
+        createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, quadIndexBuffer, quadIndexBufferMemory);
+        copyBuffer(stagingIndexBuffer, quadIndexBuffer, indexBufferSize);
+    }
+    void setupUI() {
+        uiManager = new UIManager();
+        fontManager = new FontManager();
+        fontManager->loadFont("../assets/fonts/Lato.ttf", "Lato", 48);
+        TextObject* titleText = new TextObject("ParticleFront", "Lato", {0.5f, 0.1f}, {5.0f, 1.0f}, {0, 0}, "titleText");
+        UIObject* container = new UIObject({0.1f, 0.1f}, {0.8f, 0.8f}, {0, 0}, "mainContainer", "");
+        container->addChild(titleText);
+        uiManager->addUIObject(container);
+    }
+    void renderUI(VkCommandBuffer commandBuffer){
+        Shader* uiShader = shaderManager->getShader("ui");
+        struct UIPushConstants {
+            glm::vec3 color = glm::vec3(1.0f);
+            uint32_t isUI = 1;
+        } pushData;
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipeline);
+        vkCmdPushConstants(commandBuffer, uiShader->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UIPushConstants), &pushData);
+        VkDeviceSize offsets[] = {0};
+        const auto& uiObjectWindow = uiObjects.find("mainContainer");
+        if (uiObjectWindow == uiObjects.end()) return;
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, quadVertexBuffer, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        uint32_t indexOffset = 0;
+        for (auto& child : uiObjectWindow->second.children) {
+            if(!child->enabled || typeid(*child) == typeid(TextObject)) continue;
+            UIObject* uiObj = static_cast<UIObject*>(child.get());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &uiObj->descriptorSet, 0, nullptr);
+            vkCmdDrawIndexed(commandBuffer, 6, 1, indexOffset, 0, 0);
+            indexOffset += 6;
+        }
+        for (auto& child : uiObjectWindow->second.children) {
+            if(!child->enabled || typeid(*child) != typeid(TextObject)) continue;
+            TextObject* textObj = static_cast<TextObject*>(child.get());
+            if(textObj->text.empty()) continue;
+            pushData.color = textObj->color;
+            pushData.isUI = 0;
+            vkCmdPushConstants(commandBuffer, uiShader->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UIPushConstants), &pushData);
+            Font* font = fontManager->getFont(textObj->font);
+            for (char c : textObj->text) {
+                if (font->characters.find(c) == font->characters.end()) continue;
+                Character& ch = font->characters[c];
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &ch.descriptorSet, 0, nullptr);
+                vkCmdDrawIndexed(commandBuffer, 6, 1, indexOffset, 0, 0);
+                indexOffset += 6;
+            }
         }
     }
     void createColorResources() {

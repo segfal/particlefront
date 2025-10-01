@@ -3,17 +3,32 @@
 #include <string>
 #include <vulkan/vulkan.h>
 #include <vector>
+#include "UIManager.cpp"
 #include "Renderer.cpp"
 
-struct  Shader {
+struct Shader {
     std::string name;
     std::string vertexPath;
     std::string fragmentPath;
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkDescriptorSetLayout descriptorSetLayout;
+    VkPushConstantRange pushConstantRange;
+    int poolMultiplier = 1;
     int vertexBitBindings = 1;
     int fragmentBitBindings = 4;
+};
+struct alignas(16) UIPushConstants {
+    glm::vec3 color;
+    uint32_t isUI;
+    uint32_t padding[3];
+};
+struct alignas(16) UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::vec3 cameraPos;
+    float padding;
 };
 
 class ShaderManager {
@@ -24,20 +39,22 @@ public:
     ShaderManager(std::vector<Shader*>& shaders) {
         renderer = Renderer::getInstance();
         for (auto& shader : shaders) {
-            loadShader(shader->name, shader->vertexPath, shader->fragmentPath, shader->vertexBitBindings, shader->fragmentBitBindings);
+            loadShader(shader->name, shader->vertexPath, shader->fragmentPath, shader->vertexBitBindings, shader->fragmentBitBindings, shader->pushConstantRange, shader->poolMultiplier);
         }
     }
     ~ShaderManager();
     Shader& getShader(const std::string& name) {
         return shaders[name];
     }
-    void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings) {
+    void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings, VkPushConstantRange pushConstantRange = {}, int poolMultiplier = 1) {
         Shader shader;
         shader.name = name;
         shader.vertexPath = vertexPath;
         shader.fragmentPath = fragmentPath;
         renderer->createDescriptorSetLayout(vertexBitBindings, fragmentBitBindings, shader.descriptorSetLayout);
-        renderer->createGraphicsPipeline(shader.vertexPath, shader.fragmentPath, shader.pipeline, shader.pipelineLayout, shader.descriptorSetLayout);
+        renderer->createGraphicsPipeline(shader.vertexPath, shader.fragmentPath, shader.pipeline, shader.pipelineLayout, shader.descriptorSetLayout, shader.pushConstantRange ? &shader.pushConstantRange : nullptr);
+        renderer->createDescriptorPool(shader.vertexBitBindings, shader.fragmentBitBindings, shader.descriptorPool, poolMultiplier);
+        renderer->createDescriptorSets(shader.descriptorSetLayout, shader.vertexBitBindings + shader.fragmentBitBindings, shader.descriptorSet);
         shaders[name] = shader;
     }
     static ShaderManager* getInstance() {
@@ -48,6 +65,11 @@ public:
                 .fragmentPath = "src/assets/shaders/compiled/pbr.frag.spv",
                 .vertexBitBindings = 1,
                 .fragmentBitBindings = 4,
+                .pushConstantRange = {
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .offset = 0,
+                    .size = sizeof(UniformBufferObject),
+                },
             },
             new Shader{
                 .name = "ui",
@@ -55,6 +77,12 @@ public:
                 .fragmentPath = "src/assets/shaders/compiled/ui.frag.spv",
                 .vertexBitBindings = 1,
                 .fragmentBitBindings = 1,
+                .pushConstantRange = {
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .offset = 0,
+                    .size = sizeof(UIPushConstants),
+                },
+                .poolMultiplier = UIManager::getUIObjectCount() > 0 ? UIManager::getUIObjectCount() : 1,
             },
         };
         static ShaderManager instance(defaultShaders);

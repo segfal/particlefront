@@ -62,6 +62,13 @@ public:
         FT_Done_Face(face);
         FT_Done_FreeType(ft);
     }
+    Font* getFont(const std::string& fontName) {
+        auto it = fonts.find(fontName);
+        if(it != fonts.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
 private:
     std::map<std::string, Font> fonts;
     Renderer* renderer;

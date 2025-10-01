@@ -51,4 +51,11 @@ public:
         }
         return nullptr;
     }
+    static UIManager* getInstance() {
+        static UIManager instance;
+        return &instance;
+    }
+    static uint32_t getUIObjectCount() {
+        return static_cast<uint32_t>(getInstance()->uiObjects.size());
+    }
 };
