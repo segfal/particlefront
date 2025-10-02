@@ -10,12 +10,16 @@
 class UIManager {
 private:
     std::map<std::string, UIObject*> uiObjects;
-    std::map<std::string, Image> textures;
 public:
     UIManager() = default;
     ~UIManager() {
         for(auto &entry : uiObjects) {
             delete entry.second;
+        }
+    }
+    void loadTextures() {
+        for(auto &entry : uiObjects) {
+            entry.second->loadTexture();
         }
     }
     void addUIObject(UIObject* obj) {
@@ -32,22 +36,6 @@ public:
         auto it = uiObjects.find(name);
         if(it != uiObjects.end()) {
             return it->second;
-        }
-        return nullptr;
-    }
-    void addTexture(const std::string& name, const Image& image) {
-        textures[name] = image;
-    }
-    void removeTexture(const std::string& name) {
-        auto it = textures.find(name);
-        if(it != textures.end()) {
-            textures.erase(it);
-        }
-    }
-    Image* getTexture(const std::string& name) {
-        auto it = textures.find(name);
-        if(it != textures.end()) {
-            return &it->second;
         }
         return nullptr;
     }

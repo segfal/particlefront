@@ -13,6 +13,7 @@ struct Shader {
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorPool descriptorPool;
     VkPushConstantRange pushConstantRange;
     int poolMultiplier = 1;
     int vertexBitBindings = 1;
@@ -21,6 +22,7 @@ struct Shader {
 struct alignas(16) UIPushConstants {
     glm::vec3 color;
     uint32_t isUI;
+    glm::mat4 model = glm::mat4(1.0f);
     uint32_t padding[3];
 };
 struct alignas(16) UniformBufferObject {
@@ -42,9 +44,16 @@ public:
             loadShader(shader->name, shader->vertexPath, shader->fragmentPath, shader->vertexBitBindings, shader->fragmentBitBindings, shader->pushConstantRange, shader->poolMultiplier);
         }
     }
-    ~ShaderManager();
-    Shader& getShader(const std::string& name) {
-        return shaders[name];
+    ~ShaderManager() {
+        for (auto& [name, shader] : shaders) {
+            vkDestroyPipeline(renderer->device, shader.pipeline, nullptr);
+            vkDestroyPipelineLayout(renderer->device, shader.pipelineLayout, nullptr);
+            vkDestroyDescriptorSetLayout(renderer->device, shader.descriptorSetLayout, nullptr);
+            vkDestroyDescriptorPool(renderer->device, shader.descriptorPool, nullptr);
+        }
+    }
+    Shader* getShader(const std::string& name) {
+        return &shaders[name];
     }
     void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings, VkPushConstantRange pushConstantRange = {}, int poolMultiplier = 1) {
         Shader shader;
@@ -54,7 +63,6 @@ public:
         renderer->createDescriptorSetLayout(vertexBitBindings, fragmentBitBindings, shader.descriptorSetLayout);
         renderer->createGraphicsPipeline(shader.vertexPath, shader.fragmentPath, shader.pipeline, shader.pipelineLayout, shader.descriptorSetLayout, shader.pushConstantRange ? &shader.pushConstantRange : nullptr);
         renderer->createDescriptorPool(shader.vertexBitBindings, shader.fragmentBitBindings, shader.descriptorPool, poolMultiplier);
-        renderer->createDescriptorSets(shader.descriptorSetLayout, shader.vertexBitBindings + shader.fragmentBitBindings, shader.descriptorSet);
         shaders[name] = shader;
     }
     static ShaderManager* getInstance() {

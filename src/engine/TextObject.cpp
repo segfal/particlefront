@@ -13,4 +13,5 @@ public:
     ) : text(std::move(text)), font(std::move(font)), UIObject(position, size, corner, name, "") {}
     std::string text;
     std::string font;
+    glm::vec3 color = glm::vec3(1.0f);
 };

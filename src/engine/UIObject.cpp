@@ -7,6 +7,7 @@
 #include <variant>
 #include "Image.h"
 #include "TextObject.cpp"
+#include "Renderer.cpp"
 
 class UIObject {
 private:
@@ -15,9 +16,11 @@ private:
     glm::vec2 size;
     glm::ivec2 corner;
     std::string texture;
-    std::map<std::string, std::variant<UIObject*, TextObject*>> children;
+    std::vector<VkDescriptorSet> descriptorSets;
+    bool enabled = true;
 friend class TextObject;
 public:
+    std::map<std::string, std::variant<UIObject*, TextObject*>> children;
     UIObject(glm::vec2 position,
              glm::vec2 size,
              glm::ivec2 corner,
@@ -27,7 +30,7 @@ public:
           position(position),
           size(size),
           corner(corner),
-          texture(std::move(texture)) {
+          texture(std::move(texture)) {}
     }
 
     ~UIObject() {
@@ -40,6 +43,20 @@ public:
     const glm::vec2 &getPosition() const { return position; }
     const glm::vec2 &getSize() const { return size; }
     const glm::ivec2 &getCorner() const { return corner; }
+    const bool isEnabled() const { return enabled; }
+    const std::string &getTexture() const { return texture; }
+
+    void loadTexture() {
+        if (texture.empty()) return;
+        Image* img = UIManager::getInstance()->getTexture(texture);
+        if (!img) {
+            std::cerr << "Texture " << texture << " not found!" << std::endl;
+            return;
+        }
+        Renderer* renderer = Renderer::getInstance();
+        Shader* uiShader = renderer->shaderManager->getShader("ui");
+        descriptorSets = renderer->createDescriptorSets(uiShader->descriptorSetLayout, uiShader->vertexBitBindings + uiShader->fragmentBitBindings, {img}, {});
+    }
 
     void addChild(UIObject *child) {
         children[child->getName()] = child;

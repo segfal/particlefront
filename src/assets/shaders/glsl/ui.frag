@@ -4,6 +4,8 @@ layout(binding = 0) uniform sampler2D fontTexture;
 layout(push_constant) uniform PushConstants {
     vec3 textColor;
     uint isUI;
+    mat4 model;
+    uint[3] padding;
 } pc;
 layout (location = 0) out vec4 outColor;
 

@@ -1,23 +1,15 @@
 #include "Renderer.cpp"
+#include <filesystem>
+#include <stb_image.h>
+#include "Image.h"
 #include <vulkan/vulkan.h>
 #include <string>
 #include <unordered_map>
 
-struct Texture {
-    std::string path;
-    VkImage image;
-    VkDeviceMemory imageMemory;
-    VkImageView imageView;
-    VkSampler sampler;
-    int width;
-    int height;
-};
-
 class TextureManager {
 private:
     Renderer* renderer;
-    std::unordered_map<std::string, Texture> textures;
-    unordered_map<std::string, Texture> textureAtlas;
+    std::unordered_map<std::string, Image> textureAtlas;
 public:
     TextureManager() {
         renderer = Renderer::getInstance();
@@ -25,7 +17,7 @@ public:
         prepareTextureAtlas();
     }
     ~TextureManager() {
-        for(auto& [name, texture] : textures) {
+        for(auto& [name, texture] : textureAtlas) {
             vkDestroySampler(renderer->device, texture.sampler, nullptr);
             vkDestroyImageView(renderer->device, texture.imageView, nullptr);
             vkDestroyImage(renderer->device, texture.image, nullptr);
@@ -36,7 +28,7 @@ public:
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             std::string name = entry.path().stem().string();
             if (entry.path().extension() == ".png") {
-                textureAtlas[name] = Texture{};
+                textureAtlas[name] = Image{};
                 textureAtlas[name].path = entry.path().string();
             } else if (entry.is_directory()) {
                 findAllTextures(entry.path().string() + "/", prevName + name + "_");
@@ -57,7 +49,7 @@ public:
             }
         }
         for (auto& [name, imageData] : loadedImages) {
-            Texture& texture = textureAtlas[name];
+            Image& texture = textureAtlas[name];
             stbi_uc* pixels = imageData.pixels;
             VkBuffer stagingBuffer;
             VkDeviceMemory stagingBufferMemory;
@@ -79,6 +71,13 @@ public:
             texture.imageMemory = textureImageMemory;
             renderer->createTextureImageView(VK_FORMAT_R8G8B8A8_SRGB, textureImage, texture.imageView);
         }
+    }
+    Image* getTexture(const std::string& name) {
+        auto it = textureAtlas.find(name);
+        if(it != textureAtlas.end()) {
+            return &it->second;
+        }
+        return nullptr;
     }
     static TextureManager* getInstance() {
         static TextureManager instance;
