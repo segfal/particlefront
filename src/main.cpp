@@ -1,8 +1,6 @@
-#include "./engine/Renderer.h"
+#include "engine/Renderer.h"
 
 int main() {
-    engine::Renderer* renderer = new engine::Renderer();
-    renderer->run();
-    delete renderer;
+    Renderer::getInstance()->run();
     return 0;
 }

@@ -1,30 +1,22 @@
-#include "Renderer.cpp"
+#include "TextureManager.h"
+#include "Renderer.h"
 #include <filesystem>
-#include <stb_image.h>
-#include "Image.h"
-#include <vulkan/vulkan.h>
-#include <string>
-#include <unordered_map>
+#include <stb/stb_image.h>
 
-class TextureManager {
-private:
-    Renderer* renderer;
-    std::unordered_map<std::string, Image> textureAtlas;
-public:
-    TextureManager() {
-        renderer = Renderer::getInstance();
-        findAllTextures();
-        prepareTextureAtlas();
+TextureManager::TextureManager() {
+    renderer = Renderer::getInstance();
+    findAllTextures();
+    prepareTextureAtlas();
+}
+TextureManager::~TextureManager() {
+    for(auto& [name, texture] : textureAtlas) {
+        if (texture.imageSampler) vkDestroySampler(renderer->device, texture.imageSampler, nullptr);
+        if (texture.imageView) vkDestroyImageView(renderer->device, texture.imageView, nullptr);
+        if (texture.image) vkDestroyImage(renderer->device, texture.image, nullptr);
+        if (texture.imageMemory) vkFreeMemory(renderer->device, texture.imageMemory, nullptr);
     }
-    ~TextureManager() {
-        for(auto& [name, texture] : textureAtlas) {
-            vkDestroySampler(renderer->device, texture.sampler, nullptr);
-            vkDestroyImageView(renderer->device, texture.imageView, nullptr);
-            vkDestroyImage(renderer->device, texture.image, nullptr);
-            vkFreeMemory(renderer->device, texture.imageMemory, nullptr);
-        }
-    }
-    void findAllTextures(std::string path = "src/textures/ui/", std::string prevName = "") {
+}
+void TextureManager::findAllTextures(std::string path, std::string prevName) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             std::string name = entry.path().stem().string();
             if (entry.path().extension() == ".png") {
@@ -35,10 +27,10 @@ public:
             }
         }
     }
-    void prepareTextureAtlas() {
+void TextureManager::prepareTextureAtlas() {
         std::vector<std::pair<std::string, ImageData>> loadedImages;
         #pragma omp parallel for
-        for (int i = 0; i < textureAtlas.size(); ++i) {
+        for (int i = 0; i < static_cast<int>(textureAtlas.size()); ++i) {
             auto it = std::next(textureAtlas.begin(), i);
             stbi_set_flip_vertically_on_load(true);
             int texWidth, texHeight, texChannels;
@@ -51,36 +43,37 @@ public:
         for (auto& [name, imageData] : loadedImages) {
             Image& texture = textureAtlas[name];
             stbi_uc* pixels = imageData.pixels;
+            if (!pixels || imageData.width <= 0 || imageData.height <= 0) continue;
+            VkDeviceSize imageSize = static_cast<VkDeviceSize>(imageData.width) * static_cast<VkDeviceSize>(imageData.height) * 4;
             VkBuffer stagingBuffer;
             VkDeviceMemory stagingBufferMemory;
             renderer->createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
             void* data;
             VkImage textureImage;
             VkDeviceMemory textureImageMemory;
-            vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+            vkMapMemory(renderer->device, stagingBufferMemory, 0, imageSize, 0, &data);
             memcpy(data, pixels, (size_t) imageSize);
-            vkUnmapMemory(device, stagingBufferMemory);
+            vkUnmapMemory(renderer->device, stagingBufferMemory);
             stbi_image_free(pixels);
-            renderer->createImage(texWidth, texHeight, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+            renderer->createImage(imageData.width, imageData.height, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
             renderer->transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            renderer->copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+            renderer->copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(imageData.width), static_cast<uint32_t>(imageData.height));
             renderer->transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-            vkDestroyBuffer(device, stagingBuffer, nullptr);
-            vkFreeMemory(device, stagingBufferMemory, nullptr);
+            vkDestroyBuffer(renderer->device, stagingBuffer, nullptr);
+            vkFreeMemory(renderer->device, stagingBufferMemory, nullptr);
             texture.image = textureImage;
             texture.imageMemory = textureImageMemory;
             renderer->createTextureImageView(VK_FORMAT_R8G8B8A8_SRGB, textureImage, texture.imageView);
         }
-    }
-    Image* getTexture(const std::string& name) {
+}
+Image* TextureManager::getTexture(const std::string& name) {
         auto it = textureAtlas.find(name);
         if(it != textureAtlas.end()) {
             return &it->second;
         }
         return nullptr;
-    }
-    static TextureManager* getInstance() {
-        static TextureManager instance;
-        return &instance;
-    }
-};
+}
+TextureManager* TextureManager::getInstance() {
+    static TextureManager instance;
+    return &instance;
+}
