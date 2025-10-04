@@ -429,9 +429,9 @@ struct TextVertex{
         }
         VkDescriptorPoolCreateInfo poolInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * multiplier),
             .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
             .pPoolSizes = poolSizes.data(),
-            .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * multiplier),
         };
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
@@ -692,7 +692,97 @@ struct TextVertex{
         #endif
     }
     void Renderer::cleanup() {
-
+        if (device != VK_NULL_HANDLE) {
+            vkDeviceWaitIdle(device);
+        }
+        if (uiManager) {
+            uiManager->clear();
+            uiManager = nullptr;
+        }
+        if (fontManager) {
+            fontManager->shutdown();
+            fontManager = nullptr;
+        }
+        if (textureManager) {
+            textureManager->shutdown();
+            textureManager = nullptr;
+        }
+        if (shaderManager) {
+            shaderManager->shutdown();
+            shaderManager = nullptr;
+        }
+        cleanupSwapChain();
+        if (renderPass) {
+            vkDestroyRenderPass(device, renderPass, nullptr);
+            renderPass = VK_NULL_HANDLE;
+        }
+        if (textureSampler) {
+            vkDestroySampler(device, textureSampler, nullptr);
+            textureSampler = VK_NULL_HANDLE;
+        }
+        if (!commandBuffers.empty() && commandPool) {
+            vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+            commandBuffers.clear();
+        }
+        for (size_t i = 0; i < imageAvailableSemaphores.size(); ++i) {
+            if (imageAvailableSemaphores[i]) {
+                vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+            }
+        }
+        imageAvailableSemaphores.clear();
+        for (size_t i = 0; i < renderFinishedSemaphores.size(); ++i) {
+            if (renderFinishedSemaphores[i]) {
+                vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+            }
+        }
+        renderFinishedSemaphores.clear();
+        for (size_t i = 0; i < inFlightFences.size(); ++i) {
+            if (inFlightFences[i]) {
+                vkDestroyFence(device, inFlightFences[i], nullptr);
+            }
+        }
+        inFlightFences.clear();
+        if (quadVertexBuffer) {
+            vkDestroyBuffer(device, quadVertexBuffer, nullptr);
+            quadVertexBuffer = VK_NULL_HANDLE;
+        }
+        if (quadVertexBufferMemory) {
+            vkFreeMemory(device, quadVertexBufferMemory, nullptr);
+            quadVertexBufferMemory = VK_NULL_HANDLE;
+        }
+        if (quadIndexBuffer) {
+            vkDestroyBuffer(device, quadIndexBuffer, nullptr);
+            quadIndexBuffer = VK_NULL_HANDLE;
+        }
+        if (quadIndexBufferMemory) {
+            vkFreeMemory(device, quadIndexBufferMemory, nullptr);
+            quadIndexBufferMemory = VK_NULL_HANDLE;
+        }
+        if (commandPool) {
+            vkDestroyCommandPool(device, commandPool, nullptr);
+            commandPool = VK_NULL_HANDLE;
+        }
+        if (device != VK_NULL_HANDLE) {
+            vkDestroyDevice(device, nullptr);
+            device = VK_NULL_HANDLE;
+        }
+        if (surface) {
+            vkDestroySurfaceKHR(instance, surface, nullptr);
+            surface = VK_NULL_HANDLE;
+        }
+        if (enableValidationLayers && debugMessenger) {
+            DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+            debugMessenger = VK_NULL_HANDLE;
+        }
+        if (instance) {
+            vkDestroyInstance(instance, nullptr);
+            instance = VK_NULL_HANDLE;
+        }
+        if (window) {
+            glfwDestroyWindow(window);
+            window = nullptr;
+        }
+        glfwTerminate();
     }
     void Renderer::initVulkan() {
         createInstance();
@@ -1240,6 +1330,10 @@ struct TextVertex{
         if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
+        VkClearValue clearValues[2]{};
+        clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+        clearValues[1].depthStencil = {1.0f, 0};
+
         VkRenderPassBeginInfo renderPassInfo = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .renderPass = renderPass,
@@ -1249,10 +1343,7 @@ struct TextVertex{
                 .extent = swapChainExtent,
             },
             .clearValueCount = 2,
-            .pClearValues = (VkClearValue[]) {
-                {.color = {{0.0f, 0.0f, 0.0f, 1.0f}}},
-                {.depthStencil = {1.0f, 0}},
-            },
+            .pClearValues = clearValues,
         };
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         VkViewport viewport = {

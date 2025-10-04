@@ -48,6 +48,7 @@ public:
 
     Shader* getShader(const std::string& name);
     void loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings, VkPushConstantRange pushConstantRange = {}, int poolMultiplier = 1);
+    void shutdown();
 
     static ShaderManager* getInstance();
 };

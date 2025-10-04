@@ -32,6 +32,7 @@ public:
     Font* getFont(const std::string& fontName);
 
     static FontManager* getInstance();
+    void shutdown();
 
 private:
     std::map<std::string, Font> fonts;

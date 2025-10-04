@@ -9,7 +9,9 @@
 FontManager::FontManager() {
     renderer = Renderer::getInstance();
 }
-FontManager::~FontManager() = default;
+FontManager::~FontManager() {
+    shutdown();
+}
 
 void FontManager::loadFont(const std::string& fontPath, const std::string& fontName, int fontSize) {
     FT_Library ft;
@@ -66,4 +68,35 @@ Font* FontManager::getFont(const std::string& fontName) {
 FontManager* FontManager::getInstance() {
     static FontManager instance;
     return &instance;
+}
+
+void FontManager::shutdown() {
+    if (!renderer || renderer->device == VK_NULL_HANDLE) {
+        fonts.clear();
+        return;
+    }
+    for (auto& [fontName, font] : fonts) {
+        for (auto& [ch, character] : font.characters) {
+            Image& img = character.texture;
+            if (img.imageSampler) {
+                vkDestroySampler(renderer->device, img.imageSampler, nullptr);
+                img.imageSampler = VK_NULL_HANDLE;
+            }
+            if (img.imageView) {
+                vkDestroyImageView(renderer->device, img.imageView, nullptr);
+                img.imageView = VK_NULL_HANDLE;
+            }
+            if (img.image) {
+                vkDestroyImage(renderer->device, img.image, nullptr);
+                img.image = VK_NULL_HANDLE;
+            }
+            if (img.imageMemory) {
+                vkFreeMemory(renderer->device, img.imageMemory, nullptr);
+                img.imageMemory = VK_NULL_HANDLE;
+            }
+            character.descriptorSets.clear();
+        }
+        font.characters.clear();
+    }
+    fonts.clear();
 }

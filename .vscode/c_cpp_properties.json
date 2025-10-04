@@ -8,7 +8,9 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/**",
                 "${env:VK_SDK_PATH}/Include",
-                "${env:VULKAN_SDK}/Include"
+                "${env:VK_SDK_PATH}/include",
+                "${env:VULKAN_SDK}/Include",
+                "${env:VULKAN_SDK}/include"
             ],
             "defines": [
                 "WIN32",
@@ -29,7 +31,11 @@
                     "${workspaceFolder}/include/**",
                     "${workspaceFolder}/src",
                     "${env:VK_SDK_PATH}/Include",
-                    "${env:VULKAN_SDK}/Include"
+                    "${env:VK_SDK_PATH}/include",
+                    "${env:VULKAN_SDK}/Include",
+                    "${env:VULKAN_SDK}/include",
+                    "${env:VK_SDK_PATH}/Lib",
+                    "${env:VULKAN_SDK}/Lib"
                 ],
                 "limitSymbolsToIncludedHeaders": true
             }

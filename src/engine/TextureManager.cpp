@@ -9,12 +9,7 @@ TextureManager::TextureManager() {
     prepareTextureAtlas();
 }
 TextureManager::~TextureManager() {
-    for(auto& [name, texture] : textureAtlas) {
-        if (texture.imageSampler) vkDestroySampler(renderer->device, texture.imageSampler, nullptr);
-        if (texture.imageView) vkDestroyImageView(renderer->device, texture.imageView, nullptr);
-        if (texture.image) vkDestroyImage(renderer->device, texture.image, nullptr);
-        if (texture.imageMemory) vkFreeMemory(renderer->device, texture.imageMemory, nullptr);
-    }
+    shutdown();
 }
 void TextureManager::findAllTextures(std::string path, std::string prevName) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
@@ -72,6 +67,31 @@ Image* TextureManager::getTexture(const std::string& name) {
             return &it->second;
         }
         return nullptr;
+}
+void TextureManager::shutdown() {
+    if (!renderer || renderer->device == VK_NULL_HANDLE) {
+        textureAtlas.clear();
+        return;
+    }
+    for(auto& [name, texture] : textureAtlas) {
+        if (texture.imageSampler) {
+            vkDestroySampler(renderer->device, texture.imageSampler, nullptr);
+            texture.imageSampler = VK_NULL_HANDLE;
+        }
+        if (texture.imageView) {
+            vkDestroyImageView(renderer->device, texture.imageView, nullptr);
+            texture.imageView = VK_NULL_HANDLE;
+        }
+        if (texture.image) {
+            vkDestroyImage(renderer->device, texture.image, nullptr);
+            texture.image = VK_NULL_HANDLE;
+        }
+        if (texture.imageMemory) {
+            vkFreeMemory(renderer->device, texture.imageMemory, nullptr);
+            texture.imageMemory = VK_NULL_HANDLE;
+        }
+    }
+    textureAtlas.clear();
 }
 TextureManager* TextureManager::getInstance() {
     static TextureManager instance;

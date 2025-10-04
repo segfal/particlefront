@@ -1,4 +1,3 @@
-// Clean minimal header that declares Renderer API and matches public/private from implementation
 #pragma once
 #include <vulkan/vulkan.h>
 #include <string>

@@ -8,25 +8,45 @@ ShaderManager::ShaderManager(std::vector<Shader*>& shaders) {
     }
 }
 ShaderManager::~ShaderManager() {
-    for (auto& [name, shader] : shaders) {
-        vkDestroyPipeline(renderer->device, shader.pipeline, nullptr);
-        vkDestroyPipelineLayout(renderer->device, shader.pipelineLayout, nullptr);
-        vkDestroyDescriptorSetLayout(renderer->device, shader.descriptorSetLayout, nullptr);
-        vkDestroyDescriptorPool(renderer->device, shader.descriptorPool, nullptr);
-    }
+    shutdown();
 }
 Shader* ShaderManager::getShader(const std::string& name) {
     return &shaders[name];
+}
+void ShaderManager::shutdown() {
+    if (!renderer || renderer->device == VK_NULL_HANDLE) {
+        shaders.clear();
+        return;
+    }
+    for (auto& [name, shader] : shaders) {
+        if (shader.pipeline) {
+            vkDestroyPipeline(renderer->device, shader.pipeline, nullptr);
+            shader.pipeline = VK_NULL_HANDLE;
+        }
+        if (shader.pipelineLayout) {
+            vkDestroyPipelineLayout(renderer->device, shader.pipelineLayout, nullptr);
+            shader.pipelineLayout = VK_NULL_HANDLE;
+        }
+        if (shader.descriptorSetLayout) {
+            vkDestroyDescriptorSetLayout(renderer->device, shader.descriptorSetLayout, nullptr);
+            shader.descriptorSetLayout = VK_NULL_HANDLE;
+        }
+        if (shader.descriptorPool) {
+            vkDestroyDescriptorPool(renderer->device, shader.descriptorPool, nullptr);
+            shader.descriptorPool = VK_NULL_HANDLE;
+        }
+    }
+    shaders.clear();
 }
 void ShaderManager::loadShader(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath, int vertexBitBindings, int fragmentBitBindings, VkPushConstantRange pushConstantRange, int poolMultiplier) {
     Shader shader = {
         .name = name,
         .vertexPath = vertexPath,
         .fragmentPath = fragmentPath,
-        .vertexBitBindings = vertexBitBindings,
-        .fragmentBitBindings = fragmentBitBindings,
         .pushConstantRange = pushConstantRange,
         .poolMultiplier = poolMultiplier,
+        .vertexBitBindings = vertexBitBindings,
+        .fragmentBitBindings = fragmentBitBindings,
     };
 
     renderer->createDescriptorSetLayout(shader.vertexBitBindings, shader.fragmentBitBindings, shader.descriptorSetLayout);
@@ -43,26 +63,26 @@ ShaderManager* ShaderManager::getInstance() {
             .name = "pbr",
             .vertexPath = "src/assets/shaders/compiled/pbr.vert.spv",
             .fragmentPath = "src/assets/shaders/compiled/pbr.frag.spv",
-            .vertexBitBindings = 1,
-            .fragmentBitBindings = 4,
             .pushConstantRange = {
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .offset = 0,
                 .size = sizeof(UniformBufferObject),
             },
+            .vertexBitBindings = 1,
+            .fragmentBitBindings = 4,
         },
         new Shader{
             .name = "ui",
             .vertexPath = "src/assets/shaders/compiled/ui.vert.spv",
             .fragmentPath = "src/assets/shaders/compiled/ui.frag.spv",
-            .vertexBitBindings = 0,
-            .fragmentBitBindings = 1,
             .pushConstantRange = {
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .offset = 0,
                 .size = sizeof(UIPushConstants),
             },
             .poolMultiplier = 256,
+            .vertexBitBindings = 0,
+            .fragmentBitBindings = 1,
         },
     };
     static ShaderManager instance(defaultShaders);

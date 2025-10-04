@@ -31,6 +31,13 @@ UIObject* UIManager::getUIObject(const std::string& name) {
     return nullptr;
 }
 
+void UIManager::clear() {
+    for (auto &entry : uiObjects) {
+        delete entry.second;
+    }
+    uiObjects.clear();
+}
+
 UIManager* UIManager::getInstance() {
     static UIManager instance;
     return &instance;
