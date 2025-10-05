@@ -10,9 +10,11 @@ layout(push_constant) uniform PushConstants {
 layout (location = 0) out vec4 outColor;
 
 void main(){
-    if(pc.isUI==1) outColor = texture(fontTexture, fragTexCoord);
-    else{
-        float alpha = texture(fontTexture, fragTexCoord).r;
+    if(pc.isUI==1) {
+        outColor = texture(fontTexture, fragTexCoord);
+    } else {
+        vec2 glyphUV = vec2(fragTexCoord.x, 1.0 - fragTexCoord.y);
+        float alpha = texture(fontTexture, glyphUV).r;
         outColor = vec4(pc.textColor, alpha);
         if(alpha < 0.01) discard;
     }

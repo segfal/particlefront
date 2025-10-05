@@ -21,6 +21,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include <cmath>
 #include <fstream>
 #include <variant>
 #include "Renderer.h"
@@ -240,6 +241,7 @@ struct TextVertex{
             .pName = "main",
         };
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        const uint32_t shaderStageCount = 2u;
         std::vector<VkDynamicState> dynamicStates = {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR
@@ -260,7 +262,7 @@ struct TextVertex{
         }
         VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            .vertexBindingDescriptionCount = 1,
+            .vertexBindingDescriptionCount = 1u,
             .pVertexBindingDescriptions = &bindingDescription,
             .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptionsVec.size()),
             .pVertexAttributeDescriptions = attributeDescriptionsVec.data(),
@@ -284,9 +286,9 @@ struct TextVertex{
         };
         VkPipelineViewportStateCreateInfo viewportState = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-            .viewportCount = 1,
+            .viewportCount = 1u,
             .pViewports = &viewport,
-            .scissorCount = 1,
+            .scissorCount = 1u,
             .pScissors = &scissor,
         };
         VkPipelineRasterizationStateCreateInfo rasterizer = {
@@ -323,13 +325,17 @@ struct TextVertex{
             .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
             .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             .alphaBlendOp = VK_BLEND_OP_ADD,
-            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            .colorWriteMask = static_cast<VkColorComponentFlags>(
+                VK_COLOR_COMPONENT_R_BIT |
+                VK_COLOR_COMPONENT_G_BIT |
+                VK_COLOR_COMPONENT_B_BIT |
+                VK_COLOR_COMPONENT_A_BIT),
         };
         VkPipelineColorBlendStateCreateInfo colorBlending = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             .logicOpEnable = VK_FALSE,
             .logicOp = VK_LOGIC_OP_COPY,
-            .attachmentCount = 1,
+            .attachmentCount = 1u,
             .pAttachments = &colorBlendAttachment,
             .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f},
         };
@@ -347,9 +353,9 @@ struct TextVertex{
         };
         VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
+            .setLayoutCount = 1u,
             .pSetLayouts = &descriptorSetLayout,
-            .pushConstantRangeCount = pushConstantRange ? 1 : 0,
+            .pushConstantRangeCount = pushConstantRange ? 1u : 0u,
             .pPushConstantRanges = pushConstantRange,
         };
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
@@ -357,7 +363,7 @@ struct TextVertex{
         }
         VkGraphicsPipelineCreateInfo pipelineInfo = {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .stageCount = 2,
+            .stageCount = shaderStageCount,
             .pStages = shaderStages,
             .pVertexInputState = &vertexInputInfo,
             .pInputAssemblyState = &inputAssembly,
@@ -380,11 +386,13 @@ struct TextVertex{
         vkDestroyShaderModule(device, vertexShader, nullptr);
     }
     void Renderer::createDescriptorSetLayout(int vertexBitBindings, int fragmentBitBindings, VkDescriptorSetLayout& descriptorSetLayout) {
-        uint32_t i = 0;
+        const int totalVertexBindings = std::max(vertexBitBindings, 0);
+        const int totalFragmentBindings = std::max(fragmentBitBindings, 0);
         std::vector<VkDescriptorSetLayoutBinding> bindings;
-        for (; i < vertexBitBindings; ++i) {
+        bindings.reserve(static_cast<size_t>(totalVertexBindings + totalFragmentBindings));
+        for (int bindingIndex = 0; bindingIndex < totalVertexBindings; ++bindingIndex) {
             VkDescriptorSetLayoutBinding vertexLayoutBinding = {
-                .binding = i,
+                .binding = static_cast<uint32_t>(bindingIndex),
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
@@ -392,9 +400,9 @@ struct TextVertex{
             };
             bindings.push_back(vertexLayoutBinding);
         }
-        for (; i < vertexBitBindings + fragmentBitBindings; ++i) {
+        for (int offset = 0; offset < totalFragmentBindings; ++offset) {
             VkDescriptorSetLayoutBinding fragmentLayoutBinding = {
-                .binding = i,
+                .binding = static_cast<uint32_t>(totalVertexBindings + offset),
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -449,10 +457,13 @@ struct TextVertex{
         if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
+        const uint32_t vertexBindingCountClamped = vertexBindingCount > 0 ? static_cast<uint32_t>(vertexBindingCount) : 0u;
+        const uint32_t fragmentBindingCountClamped = fragmentBindingCount > 0 ? static_cast<uint32_t>(fragmentBindingCount) : 0u;
         std::vector<VkWriteDescriptorSet> descriptorWrites;
-        descriptorWrites.reserve((vertexBindingCount + fragmentBindingCount) * MAX_FRAMES_IN_FLIGHT);
+        descriptorWrites.reserve(static_cast<size_t>(vertexBindingCountClamped + fragmentBindingCountClamped) * static_cast<size_t>(MAX_FRAMES_IN_FLIGHT));
         for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame) {
-            for (uint32_t u = 0; u < static_cast<uint32_t>(vertexBindingCount) && u < uniformBuffers.size(); ++u) {
+            const size_t uniformLimit = std::min<std::size_t>(vertexBindingCountClamped, uniformBuffers.size());
+            for (size_t u = 0; u < uniformLimit; ++u) {
                 VkDescriptorBufferInfo bufferInfo = {
                     .buffer = uniformBuffers[u],
                     .offset = 0,
@@ -461,7 +472,7 @@ struct TextVertex{
                 VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = descriptorSets[frame],
-                    .dstBinding = u,
+                    .dstBinding = static_cast<uint32_t>(u),
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -469,8 +480,12 @@ struct TextVertex{
                 };
                 descriptorWrites.push_back(write);
             }
-            for (uint32_t t = 0; t < static_cast<uint32_t>(fragmentBindingCount) && t < textures.size(); ++t) {
+            const size_t textureLimit = std::min<std::size_t>(fragmentBindingCountClamped, textures.size());
+            for (size_t t = 0; t < textureLimit; ++t) {
                 Image* img = textures[t];
+                if (!img) {
+                    continue;
+                }
                 VkDescriptorImageInfo imageInfo = {
                     .sampler = textureSampler,
                     .imageView = img->imageView,
@@ -479,7 +494,7 @@ struct TextVertex{
                 VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = descriptorSets[frame],
-                    .dstBinding = static_cast<uint32_t>(vertexBindingCount) + t,
+                    .dstBinding = vertexBindingCountClamped + static_cast<uint32_t>(t),
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -524,14 +539,26 @@ struct TextVertex{
     void Renderer::createTextureImageView(VkFormat textureFormat, VkImage textureImage, VkImageView &textureImageView) {
         textureImageView = createImageView(textureImage, textureFormat, 1);
     }
-    VkImageView Renderer::createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT){
+    VkImageView Renderer::createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags){
+        VkImageAspectFlags resolvedAspect = aspectFlags;
+        if (format == VK_FORMAT_D16_UNORM ||
+            format == VK_FORMAT_X8_D24_UNORM_PACK32 ||
+            format == VK_FORMAT_D32_SFLOAT ||
+            format == VK_FORMAT_D16_UNORM_S8_UINT ||
+            format == VK_FORMAT_D24_UNORM_S8_UINT ||
+            format == VK_FORMAT_D32_SFLOAT_S8_UINT) {
+            resolvedAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+            if (hasStencilComponent(format)) {
+                resolvedAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+        }
         VkImageViewCreateInfo viewInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = format,
             .subresourceRange = {
-                .aspectMask = aspectFlags,
+                .aspectMask = resolvedAspect,
                 .baseMipLevel = 0,
                 .levelCount = mipLevels,
                 .baseArrayLayer = 0,
@@ -588,7 +615,7 @@ struct TextVertex{
         vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         endSingleTimeCommands(commandBuffer);
     }
-    void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels = 1) {
+    void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands();
         VkImageMemoryBarrier barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -692,9 +719,6 @@ struct TextVertex{
         #endif
     }
     void Renderer::cleanup() {
-        if (device != VK_NULL_HANDLE) {
-            vkDeviceWaitIdle(device);
-        }
         if (uiManager) {
             uiManager->clear();
             uiManager = nullptr;
@@ -711,6 +735,10 @@ struct TextVertex{
             shaderManager->shutdown();
             shaderManager = nullptr;
         }
+        if (device == VK_NULL_HANDLE) {
+            return;
+        }
+        vkDeviceWaitIdle(device);
         cleanupSwapChain();
         if (renderPass) {
             vkDestroyRenderPass(device, renderPass, nullptr);
@@ -793,10 +821,10 @@ struct TextVertex{
         createSwapChain();
         createImageViews();
         createRenderPass();
+        createCommandPool();
         createTextureSampler();
         shaderManager = ShaderManager::getInstance();
         setupUI();
-        createCommandPool();
         createColorResources();
         createDepthResources();
         createFramebuffers();
@@ -1063,6 +1091,18 @@ struct TextVertex{
         createCommandBuffers();
     }
     void Renderer::cleanupSwapChain() {
+        if (device == VK_NULL_HANDLE) {
+            swapChainFramebuffers.clear();
+            swapChainImageViews.clear();
+            swapChain = VK_NULL_HANDLE;
+            depthImageView = VK_NULL_HANDLE;
+            depthImage = VK_NULL_HANDLE;
+            depthImageMemory = VK_NULL_HANDLE;
+            colorImageView = VK_NULL_HANDLE;
+            colorImage = VK_NULL_HANDLE;
+            colorImageMemory = VK_NULL_HANDLE;
+            return;
+        }
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
         }
@@ -1225,9 +1265,9 @@ struct TextVertex{
     void Renderer::setupUI() {
         uiManager = UIManager::getInstance();
         fontManager = FontManager::getInstance();
-        fontManager->loadFont("../assets/fonts/Lato.ttf", "Lato", 48);
-        TextObject* titleText = new TextObject("ParticleFront", "Lato", {0.5f, 0.1f}, {5.0f, 1.0f}, {0, 0}, "titleText");
-        UIObject* container = new UIObject({0.1f, 0.1f}, {0.8f, 0.8f}, {0, 0}, "mainContainer", "");
+        fontManager->loadFont("src/assets/fonts/Lato.ttf", "Lato", 48);
+        TextObject* titleText = new TextObject("ParticleFront", "Lato", {0.3f, 0.5f}, {200.0f, 50.0f}, {0, 0}, "titleText", {1.0f, 1.0f, 1.0f});
+        UIObject* container = new UIObject({0.1f, 0.1f}, {0.8f, 0.8f}, {0, 0}, "mainContainer", "uiWindow");
         container->addChild(titleText);
         uiManager->addUIObject(container);
     }
@@ -1247,74 +1287,135 @@ struct TextVertex{
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vb, offsets);
         vkCmdBindIndexBuffer(commandBuffer, quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+        const glm::vec2 swapExtentF(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
+        auto convertToPixels = [&](float value, float extent, float scaleFactor) -> float {
+            const float base = (std::abs(value) <= 1.0f) ? value * extent : value;
+            return base * scaleFactor;
+        };
+        auto convertVecToPixels = [&](const glm::vec2& value, float scaleFactor) -> glm::vec2 {
+            return glm::vec2(
+                convertToPixels(value.x, swapExtentF.x, scaleFactor),
+                convertToPixels(value.y, swapExtentF.y, scaleFactor)
+            );
+        };
+        auto computeAnchoredTopLeft = [&](const glm::vec2& position, const glm::vec2& sizePx, const glm::ivec2& corner, float scaleFactor) -> glm::vec2 {
+            glm::vec2 pixelPos = convertVecToPixels(position, scaleFactor);
+            glm::vec2 topLeft = pixelPos;
+            if (corner.x == 0) {
+                topLeft.x = swapExtentF.x - pixelPos.x - sizePx.x;
+            }
+            if (corner.y == 0) {
+                topLeft.y = swapExtentF.y - pixelPos.y - sizePx.y;
+            }
+            return topLeft;
+        };
+        glm::mat4 pixelToNdc(1.0f);
+        pixelToNdc[0][0] = 2.0f / std::max(swapExtentF.x, 1.0f);
+        pixelToNdc[1][1] = -2.0f / std::max(swapExtentF.y, 1.0f);
+        pixelToNdc[3][0] = -1.0f;
+        pixelToNdc[3][1] = 1.0f;
+
         auto drawUIObject = [&](UIObject* uiObj) {
             const auto &sets = uiObj->getDescriptorSets();
             if (sets.size() != MAX_FRAMES_IN_FLIGHT) return;
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &sets[currentFrame], 0, nullptr);
-            glm::vec2 pos = uiObj->getPosition();
-            glm::vec2 size = uiObj->getSize() * uiScale;
-            glm::ivec2 corner = uiObj->getCorner();
-            glm::vec2 finalPos = pos * uiScale;
-            if (corner.x == 0) finalPos.x = swapChainExtent.width - pos.x * uiScale;
-            if (corner.y == 0) finalPos.y = swapChainExtent.height - pos.y * uiScale;
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(finalPos, 0.0f));
-            model = glm::scale(model, glm::vec3(size, 1.0f));
+            glm::vec2 sizePx = convertVecToPixels(uiObj->getSize(), uiScale);
+            sizePx = glm::max(sizePx, glm::vec2(1.0f));
+            glm::vec2 topLeft = computeAnchoredTopLeft(uiObj->getPosition(), sizePx, uiObj->getCorner(), uiScale);
+            glm::vec2 center = topLeft + sizePx * 0.5f;
+            glm::mat4 pixelModel(1.0f);
+            pixelModel = glm::translate(pixelModel, glm::vec3(center, 0.0f));
+            pixelModel = glm::scale(pixelModel, glm::vec3(sizePx * 0.5f, 1.0f));
             pushData.isUI = 1;
             pushData.color = glm::vec3(1.0f);
-            pushData.model = model;
+            pushData.model = pixelToNdc * pixelModel;
             vkCmdPushConstants(commandBuffer, uiShader->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UIPushConstants), &pushData);
             vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         };
 
         auto drawTextObject = [&](TextObject* textObj) {
             if(!textObj || !textObj->isEnabled() || textObj->text.empty()) return;
-            glm::vec2 pos = textObj->getPosition();
-            glm::ivec2 corner = textObj->getCorner();
-            glm::vec2 finalPos = pos * textScale;
-            if (corner.x == 0) finalPos.x = swapChainExtent.width - pos.x * textScale;
-            if (corner.y == 0) finalPos.y = swapChainExtent.height - pos.y * textScale;
-            glm::mat4 baseModel = glm::mat4(1.0f);
-            baseModel = glm::translate(baseModel, glm::vec3(finalPos, 0.0f));
-            pushData.isUI = 0;
-            pushData.color = textObj->color;
             Font* font = fontManager->getFont(textObj->font);
             if (!font) return;
+
+            pushData.isUI = 0;
+            pushData.color = textObj->color;
+
+            const glm::vec2 textInputSize = textObj->getSize();
+            const float baseHeight = static_cast<float>(font->lineHeight > 0 ? font->lineHeight : (font->maxGlyphHeight > 0 ? font->maxGlyphHeight : font->fontSize));
+            const float defaultPixelHeight = baseHeight * textSizeScale;
+            float requestedHeightPx = convertToPixels(textInputSize.y, swapExtentF.y, textScale);
+            if (requestedHeightPx <= 0.0f) {
+                requestedHeightPx = defaultPixelHeight;
+            }
+            const float pixelScale = requestedHeightPx / std::max(defaultPixelHeight, 1.0f);
+
+            float maxAboveBaseline = 0.0f;
+            float maxBelowBaseline = 0.0f;
+            float totalAdvance = 0.0f;
+            for (char c : textObj->text) {
+                auto glyphIt = font->characters.find(c);
+                if (glyphIt == font->characters.end()) {
+                    continue;
+                }
+                const Character& glyph = glyphIt->second;
+                maxAboveBaseline = std::max(maxAboveBaseline, static_cast<float>(glyph.bearing.y));
+                maxBelowBaseline = std::max(maxBelowBaseline, static_cast<float>(glyph.size.y - glyph.bearing.y));
+                totalAdvance += static_cast<float>(glyph.advance);
+            }
+            if (maxAboveBaseline <= 0.0f) {
+                maxAboveBaseline = baseHeight * 0.8f;
+            }
+            if (maxBelowBaseline < 0.0f) {
+                maxBelowBaseline = 0.0f;
+            }
+            glm::vec2 textBoundsPx(
+                std::max(totalAdvance * pixelScale, requestedHeightPx * 0.25f),
+                std::max((maxAboveBaseline + maxBelowBaseline) * pixelScale, requestedHeightPx)
+            );
+
+            glm::vec2 anchorTopLeft = computeAnchoredTopLeft(textObj->getPosition(), textBoundsPx, textObj->getCorner(), textScale);
+            const float ascender = static_cast<float>(font->ascent != 0 ? font->ascent : maxAboveBaseline);
+            glm::vec2 baseline = anchorTopLeft + glm::vec2(0.0f, ascender * pixelScale);
+
             float cursor = 0.0f;
-            glm::vec2 textScaleFactor = textObj->getSize();
-            if (textScaleFactor.x <= 0.0f) textScaleFactor.x = 1.0f;
-            if (textScaleFactor.y <= 0.0f) textScaleFactor.y = 1.0f;
             for (char c : textObj->text) {
                 auto it = font->characters.find(c);
                 if (it == font->characters.end()) continue;
                 Character& ch = it->second;
                 if (ch.descriptorSets.size() != MAX_FRAMES_IN_FLIGHT) continue;
-                glm::vec2 glyphScaleVec = glm::vec2(ch.size) * (textSizeScale * textScaleFactor);
-                if (glyphScaleVec.x <= 0.0f) glyphScaleVec.x = textSizeScale * textScaleFactor.x;
-                if (glyphScaleVec.y <= 0.0f) glyphScaleVec.y = textSizeScale * textScaleFactor.y;
-                glm::vec3 glyphTranslate = glm::vec3(
-                    cursor + ch.bearing.x * textSizeScale * textScaleFactor.x,
-                    -(ch.size.y - ch.bearing.y) * textSizeScale * textScaleFactor.y,
-                    0.0f
-                );
-                glm::mat4 glyphModel = glm::translate(baseModel, glyphTranslate);
-                glyphModel = glm::scale(glyphModel, glm::vec3(glyphScaleVec, 1.0f));
-                pushData.model = glyphModel;
+
+                const glm::vec2 glyphSizePx = glm::vec2(ch.size) * pixelScale;
+                const float xpos = baseline.x + (cursor + static_cast<float>(ch.bearing.x)) * pixelScale;
+                const float ypos = baseline.y - static_cast<float>(ch.size.y - ch.bearing.y) * pixelScale;
+                const glm::vec2 glyphTopLeft(xpos, ypos);
+                const glm::vec2 glyphCenter = glyphTopLeft + glyphSizePx * 0.5f;
+
+                glm::mat4 glyphModel(1.0f);
+                glyphModel = glm::translate(glyphModel, glm::vec3(glyphCenter, 0.0f));
+                glyphModel = glm::scale(glyphModel, glm::vec3(glyphSizePx * 0.5f, 1.0f));
+
+                pushData.model = pixelToNdc * glyphModel;
                 vkCmdPushConstants(commandBuffer, uiShader->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(UIPushConstants), &pushData);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &ch.descriptorSets[currentFrame], 0, nullptr);
                 vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
-                cursor += (static_cast<float>(ch.advance) / 64.0f) * textSizeScale * textScaleFactor.x;
+
+                cursor += static_cast<float>(ch.advance);
             }
         };
 
         auto traverse = [&](auto&& self, UIObject* node) -> void {
             if (!node || !node->isEnabled()) return;
             drawUIObject(node);
-            for (auto &child : node->children) {
-                if (std::holds_alternative<UIObject*>(child.second)) {
-                    self(self, std::get<UIObject*>(child.second));
-                } else if (std::holds_alternative<TextObject*>(child.second)) {
-                    drawTextObject(std::get<TextObject*>(child.second));
+            for (auto& childEntry : node->children) {
+                UIObject* child = childEntry.second;
+                if (!child) {
+                    continue;
+                }
+                if (auto* textChild = dynamic_cast<TextObject*>(child)) {
+                    drawTextObject(textChild);
+                } else {
+                    self(self, child);
                 }
             }
         };
@@ -1399,7 +1500,7 @@ struct TextVertex{
             throw std::runtime_error("failed to create texture sampler!");
         }
     }
-    void Renderer::createTextureSampler(VkSampler &sampler, uint32_t mipLevels = 1){
+    void Renderer::createTextureSampler(VkSampler &sampler, uint32_t mipLevels){
         VkSamplerCreateInfo samplerInfo = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
             .magFilter = VK_FILTER_LINEAR,

@@ -155,7 +155,13 @@ elseif(IS_WINDOWS)
     endif()
     find_package(Freetype REQUIRED)
 
-    target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} glfw3_mt ${FREETYPE_LIBRARIES})
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/include/glfw)
+
+    target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} glfw ${FREETYPE_LIBRARIES})
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${FREETYPE_INCLUDE_DIRS}
     )
@@ -225,66 +231,30 @@ else()
     endif()
 endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR NOT CMAKE_BUILD_TYPE)
-    message(STATUS "Building in Release mode")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_compile_options(${PROJECT_NAME} PRIVATE
-            -O3
-            -DNDEBUG
-            -funroll-loops
-            -fvectorize
-            -fslp-vectorize
-            -ffast-math
-            -march=native
-            -mtune=native
-            -flto
-            -fomit-frame-pointer
-            -finline-functions
-        )
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION TRUE
-        )
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        target_compile_options(${PROJECT_NAME} PRIVATE
-            -O3
-            -DNDEBUG
-            -funroll-loops
-            -ffast-math
-            -march=native
-            -mtune=native
-            -flto
-            -fomit-frame-pointer
-            -finline-functions
-            -ftree-vectorize
-        )
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION TRUE
-        )
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        target_compile_options(${PROJECT_NAME} PRIVATE 
-            /O2
-            /Oi
-            /Ot
-            /Gy
-            /GL
-            /fp:fast
-            /DNDEBUG
-        )
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION TRUE
-        )
-    endif()
-else()
-    message(STATUS "Building in Debug mode")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        target_compile_options(${PROJECT_NAME} PRIVATE 
-            -Wall -Wextra -g -O0
-        )
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        target_compile_options(${PROJECT_NAME} PRIVATE 
-            /W4 /Zi /Od
-        )
-    endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:-O3 -DNDEBUG -funroll-loops -fvectorize -fslp-vectorize -ffast-math -march=native -mtune=native -flto -fomit-frame-pointer -finline-functions>
+        $<$<CONFIG:Debug>:-Wall -Wextra -g -O0>
+    )
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+    )
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:-O3 -DNDEBUG -funroll-loops -ffast-math -march=native -mtune=native -flto -fomit-frame-pointer -finline-functions -ftree-vectorize>
+        $<$<CONFIG:Debug>:-Wall -Wextra -g -O0>
+    )
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+    )
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:/O2 /Oi /Ot /Gy /GL /fp:fast /DNDEBUG>
+        $<$<CONFIG:Debug>:/W4 /Zi /Od>
+    )
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+    )
 endif()
 
 if(IS_MACOS)

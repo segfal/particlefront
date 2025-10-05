@@ -5,6 +5,31 @@
 #include <iostream>
 #include <vector>
 
+UIObject::~UIObject() {
+    for (auto &entry : children) {
+        delete entry.second;
+    }
+    children.clear();
+}
+
+void UIObject::addChild(UIObject* child) {
+    if (!child) {
+        return;
+    }
+    children[child->getName()] = child;
+}
+
+void UIObject::removeChild(UIObject* child) {
+    if (!child) {
+        return;
+    }
+    auto it = children.find(child->getName());
+    if (it != children.end()) {
+        delete it->second;
+        children.erase(it);
+    }
+}
+
 void UIObject::loadTexture() {
     if (!texture.empty()) {
         TextureManager* texMgr = TextureManager::getInstance();
@@ -26,11 +51,9 @@ void UIObject::loadTexture() {
             );
         }
     }
-    for (auto &entry : children) {
-        if (std::holds_alternative<UIObject*>(entry.second)) {
-            if (UIObject* child = std::get<UIObject*>(entry.second)) {
-                child->loadTexture();
-            }
+    for (auto& entry : children) {
+        if (entry.second) {
+            entry.second->loadTexture();
         }
     }
 }

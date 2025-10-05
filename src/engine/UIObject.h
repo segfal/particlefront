@@ -4,13 +4,12 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <map>
-#include <variant>
+#include <vector>
 #include "Image.h"
 
 class Renderer;
-class Shader;
+struct Shader;
 class TextureManager;
-class TextObject;
 
 class UIObject {
 private:
@@ -23,7 +22,7 @@ private:
     bool enabled = true;
     
 public:
-    std::map<std::string, std::variant<UIObject*, TextObject*>> children;
+    std::map<std::string, UIObject*> children;
 
     UIObject(glm::vec2 position,
              glm::vec2 size,
@@ -36,11 +35,7 @@ public:
           corner(corner),
           texture(std::move(texture)) {}
 
-    virtual ~UIObject() {
-        for (auto &entry : children) {
-            std::visit([](auto* child) { delete child; }, entry.second);
-        }
-    }
+    virtual ~UIObject();
 
     const std::string &getName() const { return name; }
     const glm::vec2 &getPosition() const { return position; }
@@ -53,13 +48,22 @@ public:
 
     const std::vector<VkDescriptorSet>& getDescriptorSets() const { return descriptorSets; }
 
-    void addChild(UIObject *child) { children[child->getName()] = child; }
-    void addChild(TextObject *child) { children[child->getName()] = child; }
-    void removeChild(UIObject *child) {
-        auto it = children.find(child->getName());
-        if (it != children.end()) {
-            std::visit([](auto* child) { delete child; }, it->second);
-            children.erase(it);
-        }
-    }
+    void addChild(UIObject *child);
+    void removeChild(UIObject *child);
+};
+
+class TextObject : public UIObject {
+public:
+    TextObject(
+        std::string text,
+        std::string font,
+        glm::vec2 position,
+        glm::vec2 size,
+        glm::ivec2 corner,
+        std::string name,
+        glm::vec3 color
+    );
+    std::string text;
+    std::string font;
+    glm::vec3 color;
 };

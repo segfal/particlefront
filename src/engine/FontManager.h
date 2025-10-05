@@ -20,6 +20,11 @@ struct Character {
 
 struct Font {
     std::string fontName;
+    int fontSize = 0;
+    int ascent = 0;
+    int descent = 0;
+    int lineHeight = 0;
+    int maxGlyphHeight = 0;
     std::map<char, Character> characters;
 };
 

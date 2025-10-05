@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include <filesystem>
 #include <stb/stb_image.h>
+#include "../utils.h"
 
 TextureManager::TextureManager() {
     renderer = Renderer::getInstance();
@@ -12,16 +13,26 @@ TextureManager::~TextureManager() {
     shutdown();
 }
 void TextureManager::findAllTextures(std::string path, std::string prevName) {
-        for (const auto& entry : std::filesystem::directory_iterator(path)) {
-            std::string name = entry.path().stem().string();
-            if (entry.path().extension() == ".png") {
-                textureAtlas[name] = Image{};
-                textureAtlas[name].path = entry.path().string();
-            } else if (entry.is_directory()) {
-                findAllTextures(entry.path().string() + "/", prevName + name + "_");
-            }
+    namespace fs = std::filesystem;
+    fs::path searchPath = resolvePath(path);
+    std::error_code ec;
+    if ((!fs::exists(searchPath, ec) || !fs::is_directory(searchPath, ec)) && prevName.empty()) {
+        searchPath = resolvePath("src/assets/textures/");
+    }
+    if (!fs::exists(searchPath, ec) || !fs::is_directory(searchPath, ec)) {
+        return;
+    }
+
+    for (const auto& entry : fs::directory_iterator(searchPath)) {
+        std::string name = entry.path().stem().string();
+        if (entry.path().extension() == ".png") {
+            textureAtlas[name] = Image{};
+            textureAtlas[name].path = entry.path().string();
+        } else if (entry.is_directory()) {
+            findAllTextures(entry.path().string(), prevName + name + "_");
         }
     }
+}
 void TextureManager::prepareTextureAtlas() {
         std::vector<std::pair<std::string, ImageData>> loadedImages;
         #pragma omp parallel for
