@@ -28,6 +28,7 @@
 #include "UIManager.h"
 #include "ShaderManager.h"
 #include "FontManager.h"
+#include "SceneManager.h"
 #include "TextureManager.h"
 #include "UIObject.h"
 #include "TextObject.h"
@@ -706,17 +707,10 @@ struct TextVertex{
         glfwSetCursorPosCallback(window, mouseMoveCallback);
         float xscale = 1.0f, yscale = 1.0f;
         glfwGetWindowContentScale(window, &xscale, &yscale);
-        float deviceScale = xscale;
-        #if defined(__APPLE__)
-            uiScale = 1.0f;
-            textScale = 1.0f;
-            textSizeScale = 1.0f;
-        #else
-            const float baseline = 2.0f;
-            uiScale = deviceScale > 0.0f ? (deviceScale / baseline) : 1.0f;
-            textScale = 1.0f;
-            textSizeScale = uiScale;
-        #endif
+        float deviceScale = std::max(xscale, 1.0f);
+        uiScale = deviceScale;
+        textScale = deviceScale;
+        textSizeScale = 1.0f;
     }
     void Renderer::cleanup() {
         if (uiManager) {
@@ -825,6 +819,8 @@ struct TextVertex{
         createTextureSampler();
         shaderManager = ShaderManager::getInstance();
         setupUI();
+        sceneManager = SceneManager::getInstance();
+        sceneManager->switchScene(0);
         createColorResources();
         createDepthResources();
         createFramebuffers();
@@ -1266,10 +1262,6 @@ struct TextVertex{
         uiManager = UIManager::getInstance();
         fontManager = FontManager::getInstance();
         fontManager->loadFont("src/assets/fonts/Lato.ttf", "Lato", 48);
-        TextObject* titleText = new TextObject("ParticleFront", "Lato", {0.3f, 0.5f}, {200.0f, 50.0f}, {0, 0}, "titleText", {1.0f, 1.0f, 1.0f});
-        UIObject* container = new UIObject({0.1f, 0.1f}, {0.8f, 0.8f}, {0, 0}, "mainContainer", "uiWindow");
-        container->addChild(titleText);
-        uiManager->addUIObject(container);
     }
     void Renderer::renderUI(VkCommandBuffer commandBuffer){
         Shader* uiShader = getShaderManager()->getShader("ui");
@@ -1288,26 +1280,58 @@ struct TextVertex{
         vkCmdBindIndexBuffer(commandBuffer, quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         const glm::vec2 swapExtentF(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-        auto convertToPixels = [&](float value, float extent, float scaleFactor) -> float {
-            const float base = (std::abs(value) <= 1.0f) ? value * extent : value;
-            return base * scaleFactor;
+        struct LayoutRect {
+            glm::vec2 pos;
+            glm::vec2 size;
         };
-        auto convertVecToPixels = [&](const glm::vec2& value, float scaleFactor) -> glm::vec2 {
-            return glm::vec2(
-                convertToPixels(value.x, swapExtentF.x, scaleFactor),
-                convertToPixels(value.y, swapExtentF.y, scaleFactor)
+        constexpr glm::vec2 designResolution(800.0f, 600.0f);
+        float layoutScale = std::max(uiScale, 0.0001f);
+        glm::vec2 canvasSize = designResolution * layoutScale;
+        glm::vec2 canvasOrigin = 0.5f * (swapExtentF - canvasSize);
+
+        auto convertComponent = [&](float value, float parentReference) -> float {
+            if (std::abs(value) <= 1.0f) {
+                return value * parentReference;
+            }
+            return value;
+        };
+        auto resolveDesignRect = [&](UIObject* obj, const LayoutRect& parentRect) -> LayoutRect {
+            glm::vec2 sizeInput = obj->getSize();
+            glm::vec2 sizeDesign(
+                convertComponent(sizeInput.x, parentRect.size.x),
+                convertComponent(sizeInput.y, parentRect.size.y)
             );
+            sizeDesign = glm::max(sizeDesign, glm::vec2(1.0f));
+
+            glm::vec2 offset(
+                convertComponent(obj->getPosition().x, parentRect.size.x),
+                convertComponent(obj->getPosition().y, parentRect.size.y)
+            );
+
+            glm::vec2 topLeft(parentRect.pos);
+            const glm::ivec2 corner = obj->getCorner();
+            if (corner.x == 2) {
+                topLeft.x += parentRect.size.x - offset.x - sizeDesign.x;
+            } else if (corner.x == 1) {
+                topLeft.x += (parentRect.size.x - sizeDesign.x) * 0.5f + offset.x;
+            } else {
+                topLeft.x += offset.x;
+            }
+            if (corner.y == 2) {
+                topLeft.y += parentRect.size.y - offset.y - sizeDesign.y;
+            } else if (corner.y == 1) {
+                topLeft.y += (parentRect.size.y - sizeDesign.y) * 0.5f + offset.y;
+            } else {
+                topLeft.y += offset.y;
+            }
+
+            return {topLeft, sizeDesign};
         };
-        auto computeAnchoredTopLeft = [&](const glm::vec2& position, const glm::vec2& sizePx, const glm::ivec2& corner, float scaleFactor) -> glm::vec2 {
-            glm::vec2 pixelPos = convertVecToPixels(position, scaleFactor);
-            glm::vec2 topLeft = pixelPos;
-            if (corner.x == 0) {
-                topLeft.x = swapExtentF.x - pixelPos.x - sizePx.x;
-            }
-            if (corner.y == 0) {
-                topLeft.y = swapExtentF.y - pixelPos.y - sizePx.y;
-            }
-            return topLeft;
+        auto toPixelRect = [&](const LayoutRect& designRect) -> LayoutRect {
+            LayoutRect pixelRect;
+            pixelRect.pos = canvasOrigin + designRect.pos * layoutScale;
+            pixelRect.size = glm::max(designRect.size * layoutScale, glm::vec2(1.0f));
+            return pixelRect;
         };
         glm::mat4 pixelToNdc(1.0f);
         pixelToNdc[0][0] = 2.0f / std::max(swapExtentF.x, 1.0f);
@@ -1315,17 +1339,14 @@ struct TextVertex{
         pixelToNdc[3][0] = -1.0f;
         pixelToNdc[3][1] = 1.0f;
 
-        auto drawUIObject = [&](UIObject* uiObj) {
-            const auto &sets = uiObj->getDescriptorSets();
+        auto drawUIObject = [&](UIObject* uiObj, const LayoutRect& rect) {
+            const auto& sets = uiObj->getDescriptorSets();
             if (sets.size() != MAX_FRAMES_IN_FLIGHT) return;
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &sets[currentFrame], 0, nullptr);
-            glm::vec2 sizePx = convertVecToPixels(uiObj->getSize(), uiScale);
-            sizePx = glm::max(sizePx, glm::vec2(1.0f));
-            glm::vec2 topLeft = computeAnchoredTopLeft(uiObj->getPosition(), sizePx, uiObj->getCorner(), uiScale);
-            glm::vec2 center = topLeft + sizePx * 0.5f;
+            glm::vec2 center = rect.pos + rect.size * 0.5f;
             glm::mat4 pixelModel(1.0f);
             pixelModel = glm::translate(pixelModel, glm::vec3(center, 0.0f));
-            pixelModel = glm::scale(pixelModel, glm::vec3(sizePx * 0.5f, 1.0f));
+            pixelModel = glm::scale(pixelModel, glm::vec3(rect.size * 0.5f, 1.0f));
             pushData.isUI = 1;
             pushData.color = glm::vec3(1.0f);
             pushData.model = pixelToNdc * pixelModel;
@@ -1333,7 +1354,7 @@ struct TextVertex{
             vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         };
 
-        auto drawTextObject = [&](TextObject* textObj) {
+        auto drawTextObject = [&](TextObject* textObj, const LayoutRect& designRect, const LayoutRect& pixelRect) {
             if(!textObj || !textObj->isEnabled() || textObj->text.empty()) return;
             Font* font = fontManager->getFont(textObj->font);
             if (!font) return;
@@ -1341,10 +1362,15 @@ struct TextVertex{
             pushData.isUI = 0;
             pushData.color = textObj->color;
 
-            const glm::vec2 textInputSize = textObj->getSize();
             const float baseHeight = static_cast<float>(font->lineHeight > 0 ? font->lineHeight : (font->maxGlyphHeight > 0 ? font->maxGlyphHeight : font->fontSize));
-            const float defaultPixelHeight = baseHeight * textSizeScale;
-            float requestedHeightPx = convertToPixels(textInputSize.y, swapExtentF.y, textScale);
+            const float designReferenceHeight = 720.0f;
+            float defaultDesignHeight = designRect.size.y;
+            if (defaultDesignHeight <= 0.0f) {
+                float designScaleFactor = designResolution.y / std::max(designReferenceHeight, 1.0f);
+                defaultDesignHeight = baseHeight * std::max(designScaleFactor, 0.001f);
+            }
+            const float defaultPixelHeight = defaultDesignHeight * layoutScale * std::max(textSizeScale, 0.001f);
+            float requestedHeightPx = pixelRect.size.y;
             if (requestedHeightPx <= 0.0f) {
                 requestedHeightPx = defaultPixelHeight;
             }
@@ -1369,14 +1395,25 @@ struct TextVertex{
             if (maxBelowBaseline < 0.0f) {
                 maxBelowBaseline = 0.0f;
             }
-            glm::vec2 textBoundsPx(
-                std::max(totalAdvance * pixelScale, requestedHeightPx * 0.25f),
-                std::max((maxAboveBaseline + maxBelowBaseline) * pixelScale, requestedHeightPx)
-            );
-
-            glm::vec2 anchorTopLeft = computeAnchoredTopLeft(textObj->getPosition(), textBoundsPx, textObj->getCorner(), textScale);
             const float ascender = static_cast<float>(font->ascent != 0 ? font->ascent : maxAboveBaseline);
-            glm::vec2 baseline = anchorTopLeft + glm::vec2(0.0f, ascender * pixelScale);
+            const float actualTextWidthPx = totalAdvance * pixelScale;
+            const glm::ivec2 corner = textObj->getCorner();
+
+            float baselineX = pixelRect.pos.x;
+            if (corner.x == 2) {
+                baselineX = pixelRect.pos.x + pixelRect.size.x - actualTextWidthPx;
+            } else if (corner.x == 1) {
+                baselineX = pixelRect.pos.x + (pixelRect.size.x - actualTextWidthPx) * 0.5f;
+            }
+
+            float baselineY;
+            if (corner.y == 2) {
+                baselineY = pixelRect.pos.y + pixelRect.size.y - (maxBelowBaseline * pixelScale);
+            } else if (corner.y == 1) {
+                baselineY = pixelRect.pos.y + (pixelRect.size.y - (maxAboveBaseline + maxBelowBaseline) * pixelScale) * 0.5f;
+            } else {
+                baselineY = pixelRect.pos.y + ascender * pixelScale;
+            }
 
             float cursor = 0.0f;
             for (char c : textObj->text) {
@@ -1386,8 +1423,8 @@ struct TextVertex{
                 if (ch.descriptorSets.size() != MAX_FRAMES_IN_FLIGHT) continue;
 
                 const glm::vec2 glyphSizePx = glm::vec2(ch.size) * pixelScale;
-                const float xpos = baseline.x + (cursor + static_cast<float>(ch.bearing.x)) * pixelScale;
-                const float ypos = baseline.y - static_cast<float>(ch.size.y - ch.bearing.y) * pixelScale;
+                const float xpos = baselineX + (cursor + static_cast<float>(ch.bearing.x)) * pixelScale;
+                const float ypos = baselineY - static_cast<float>(ch.size.y - ch.bearing.y) * pixelScale;
                 const glm::vec2 glyphTopLeft(xpos, ypos);
                 const glm::vec2 glyphCenter = glyphTopLeft + glyphSizePx * 0.5f;
 
@@ -1404,23 +1441,28 @@ struct TextVertex{
             }
         };
 
-        auto traverse = [&](auto&& self, UIObject* node) -> void {
+        auto traverse = [&](auto&& self, UIObject* node, const LayoutRect& parentDesignRect) -> void {
             if (!node || !node->isEnabled()) return;
-            drawUIObject(node);
+
+            if (auto* textNode = dynamic_cast<TextObject*>(node)) {
+                LayoutRect designRect = resolveDesignRect(textNode, parentDesignRect);
+                LayoutRect pixelRect = toPixelRect(designRect);
+                drawTextObject(textNode, designRect, pixelRect);
+                return;
+            }
+
+            LayoutRect designRect = resolveDesignRect(node, parentDesignRect);
+            LayoutRect pixelRect = toPixelRect(designRect);
+            drawUIObject(node, pixelRect);
             for (auto& childEntry : node->children) {
-                UIObject* child = childEntry.second;
-                if (!child) {
-                    continue;
-                }
-                if (auto* textChild = dynamic_cast<TextObject*>(child)) {
-                    drawTextObject(textChild);
-                } else {
-                    self(self, child);
+                if (UIObject* child = childEntry.second) {
+                    self(self, child, designRect);
                 }
             }
         };
 
-        traverse(traverse, root);
+        LayoutRect rootDesignRect{glm::vec2(0.0f), designResolution};
+        traverse(traverse, root, rootDesignRect);
     }
     void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         VkCommandBufferBeginInfo beginInfo = {

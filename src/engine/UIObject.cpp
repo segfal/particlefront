@@ -6,7 +6,7 @@
 #include <vector>
 
 UIObject::~UIObject() {
-    for (auto &entry : children) {
+    for (auto& entry : children) {
         delete entry.second;
     }
     children.clear();

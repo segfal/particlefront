@@ -7,6 +7,7 @@
 struct GLFWwindow;
 class UIManager;
 class FontManager;
+class SceneManager;
 class ShaderManager;
 class TextureManager;
 class Image;
@@ -139,6 +140,7 @@ private:
     FontManager* fontManager = nullptr;
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     ShaderManager* shaderManager = nullptr;
+    SceneManager* sceneManager = nullptr;
     TextureManager* textureManager = nullptr;
     bool framebufferResized = false;
     bool firstMouse = true;

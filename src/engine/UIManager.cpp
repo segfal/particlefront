@@ -2,13 +2,13 @@
 #include "UIObject.h"
 
 UIManager::~UIManager() {
-    for(auto &entry : uiObjects) {
+    for (auto& entry : uiObjects) {
         delete entry.second;
     }
 }
 
 void UIManager::loadTextures() {
-    for(auto &entry : uiObjects) {
+    for (auto& entry : uiObjects) {
         entry.second->loadTexture();
     }
 }
@@ -32,7 +32,7 @@ UIObject* UIManager::getUIObject(const std::string& name) {
 }
 
 void UIManager::clear() {
-    for (auto &entry : uiObjects) {
+    for (auto& entry : uiObjects) {
         delete entry.second;
     }
     uiObjects.clear();
