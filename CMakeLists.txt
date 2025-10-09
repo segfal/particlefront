@@ -48,9 +48,16 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/include/glm)
+include_directories(${CMAKE_SOURCE_DIR}/include/fastgltf/include)
 if(IS_WINDOWS)
     link_directories(${CMAKE_SOURCE_DIR}/include)
 endif()
+
+set(FASTGLTF_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_ENABLE_DOCS OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_COMPILE_AS_CPP20 ON CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_SOURCE_DIR}/include/fastgltf)
 
 set(SOURCES
     src/main.cpp

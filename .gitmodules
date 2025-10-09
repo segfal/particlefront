@@ -13,3 +13,6 @@
 [submodule "include/freetype"]
 	path = include/freetype
 	url = https://github.com/freetype/freetype
+[submodule "include/fastgltf"]
+	path = include/fastgltf
+	url = https://github.com/spnda/fastgltf
