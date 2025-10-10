@@ -26,8 +26,8 @@ void TextureManager::findAllTextures(std::string path, std::string prevName) {
     for (const auto& entry : fs::directory_iterator(searchPath)) {
         std::string name = entry.path().stem().string();
         if (entry.path().extension() == ".png") {
-            textureAtlas[name] = Image{};
-            textureAtlas[name].path = entry.path().string();
+            textureAtlas[prevName + name] = Image{};
+            textureAtlas[prevName + name].path = entry.path().string();
         } else if (entry.is_directory()) {
             findAllTextures(entry.path().string(), prevName + name + "_");
         }

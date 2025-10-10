@@ -51,9 +51,4 @@ void UIObject::loadTexture() {
             );
         }
     }
-    for (auto& entry : children) {
-        if (entry.second) {
-            entry.second->loadTexture();
-        }
-    }
 }

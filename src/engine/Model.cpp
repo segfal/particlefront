@@ -6,6 +6,7 @@
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
 #include <glm/glm.hpp>
+#include "Renderer.h"
 
 struct GeoSurface {
     uint32_t startIndex;
@@ -94,4 +95,26 @@ void Model::loadFromFile(const std::string& path) {
                 });
         }
     }
+    Renderer::Renderer* renderer = Renderer::getInstance();
+    renderer->createBuffer(vertices.size() * sizeof(float), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+    renderer->createBuffer(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+    VkBuffer stagingVertexBuffer;
+    VkDeviceMemory stagingVertexBufferMemory;
+    renderer->createBuffer(vertices.size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingVertexBuffer, stagingVertexBufferMemory);
+    void* data;
+    vkMapMemory(renderer->getDevice(), stagingVertexBufferMemory, 0, vertices.size() * sizeof(float), 0, &data);
+    memcpy(data, vertices.data(), vertices.size() * sizeof(float));
+    vkUnmapMemory(renderer->getDevice(), stagingVertexBufferMemory);
+    renderer->copyBuffer(stagingVertexBuffer, vertexBuffer, vertices.size() * sizeof(float));
+    VkBuffer stagingIndexBuffer;
+    VkDeviceMemory stagingIndexBufferMemory;
+    renderer->createBuffer(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingIndexBuffer, stagingIndexBufferMemory);
+    vkMapMemory(renderer->getDevice(), stagingIndexBufferMemory, 0, indices.size() * sizeof(uint32_t), 0, &data);
+    memcpy(data, indices.data(), indices.size() * sizeof(uint32_t));
+    vkUnmapMemory(renderer->getDevice(), stagingIndexBufferMemory);
+    renderer->copyBuffer(stagingIndexBuffer, indexBuffer, indices.size() * sizeof(uint32_t));
+    vkDestroyBuffer(renderer->getDevice(), stagingIndexBuffer, nullptr);
+    vkFreeMemory(renderer->getDevice(), stagingIndexBufferMemory, nullptr);
+    vkDestroyBuffer(renderer->getDevice(), stagingVertexBuffer, nullptr);
+    vkFreeMemory(renderer->getDevice(), stagingVertexBufferMemory, nullptr);
 }

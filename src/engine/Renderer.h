@@ -8,6 +8,8 @@ struct GLFWwindow;
 class UIManager;
 class FontManager;
 class SceneManager;
+class EntityManager;
+class ModelManager;
 class ShaderManager;
 class TextureManager;
 class Image;
@@ -81,6 +83,7 @@ private:
     void createQuadBuffers();
     void setupUI();
     void renderUI(VkCommandBuffer commandBuffer);
+    void renderEntities(VkCommandBuffer commandBuffer);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void createColorResources();
     void createDepthResources();
@@ -142,6 +145,8 @@ private:
     ShaderManager* shaderManager = nullptr;
     SceneManager* sceneManager = nullptr;
     TextureManager* textureManager = nullptr;
+    ModelManager* modelManager = nullptr;
+    EntityManager* entityManager = nullptr;
     bool framebufferResized = false;
     bool firstMouse = true;
     float uiScale = 1.0f;

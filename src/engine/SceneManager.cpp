@@ -8,7 +8,14 @@ SceneManager::SceneManager() {
         addScene(id, sceneFunc);
     }
 }
-SceneManager::~SceneManager() = default;
+SceneManager::~SceneManager() {
+    shutdown();
+}
+
+void SceneManager::shutdown() {
+    currentScene = 0;
+    scenes.clear();
+}
 
 void SceneManager::addScene(int id, std::function<void()> func) {
     scenes[id] = std::move(func);

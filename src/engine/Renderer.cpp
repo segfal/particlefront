@@ -24,12 +24,16 @@
 #include <cmath>
 #include <fstream>
 #include <variant>
+#include <queue>
 #include "Renderer.h"
 #include "UIManager.h"
 #include "ShaderManager.h"
 #include "FontManager.h"
 #include "SceneManager.h"
 #include "TextureManager.h"
+#include "EntityManager.h"
+#include "ModelManager.h"
+#include "Model.h"
 #include "UIObject.h"
 #include "TextObject.h"
 #include "../utils.h"
@@ -729,6 +733,18 @@ struct TextVertex{
             shaderManager->shutdown();
             shaderManager = nullptr;
         }
+        if (sceneManager) {
+            sceneManager->shutdown();
+            sceneManager = nullptr;
+        }
+        if (entityManager) {
+            entityManager->shutdown();
+            entityManager = nullptr;
+        }
+        if (modelManager) {
+            modelManager->shutdown();
+            modelManager = nullptr;
+        }
         if (device == VK_NULL_HANDLE) {
             return;
         }
@@ -821,6 +837,8 @@ struct TextVertex{
         setupUI();
         sceneManager = SceneManager::getInstance();
         sceneManager->switchScene(0);
+        modelManager = ModelManager::getInstance();
+        entityManager = EntityManager::getInstance();
         createColorResources();
         createDepthResources();
         createFramebuffers();
@@ -1262,6 +1280,73 @@ struct TextVertex{
         uiManager = UIManager::getInstance();
         fontManager = FontManager::getInstance();
         fontManager->loadFont("src/assets/fonts/Lato.ttf", "Lato", 48);
+    }
+    void Renderer::renderEntities(VkCommandBuffer commandBuffer) {
+        auto& entities = entityManager->getAllEntities();
+        glm::vec3 cameraPos = glm::vec3(0.0f);
+        if (entities.find("camera") != entities.end()) {
+            Entity* cameraEntity = entities["camera"];
+            cameraPos = cameraEntity->getPosition();
+        }
+        auto renderEntity = [&](Entity* entity, glm::mat4 prevModel) -> std::optional<glm::mat4> {
+            std::string shaderName = entity->getShader();
+            if (shaderName.empty()) {
+                return std::nullopt;
+            }
+            Shader* shader = shaderManager->getShader(shaderName);
+            if (shader == nullptr) {
+                return std::nullopt;
+            }
+            Model* model = entity->getModel();
+            if (!model) {
+                return std::nullopt;
+            }
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline);
+            VkDeviceSize offsets[] = {0};
+            std::vector<VkDescriptorSet> descriptorSets = entity->getDescriptorSets();
+            VkBuffer vertexBuffer = model->getVertexBuffer();
+            VkBuffer indexBuffer = model->getIndexBuffer();
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
+            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            if (vertexBuffer == VK_NULL_HANDLE || indexBuffer == VK_NULL_HANDLE) return;
+            if (descriptorSets.size() == MAX_FRAMES_IN_FLIGHT) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+            }
+            struct alignas(16) PBRPushConstants {
+                glm::mat4 model = glm::mat4(1.0f);
+                glm::mat4 view = glm::mat4(1.0f);
+                glm::mat4 proj = glm::mat4(1.0f);
+                glm::vec3 cameraPos = cameraPos;
+                float padding;
+            } pushData;
+            pushData.model = prevModel;
+            glm::vec3 position = entity->getPosition();
+            glm::vec3 scale = entity->getScale();
+            glm::vec3 rotation = entity->getRotation();
+            pushData.model = glm::translate(pushData.model, position);
+            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            pushData.model = glm::scale(pushData.model, scale);
+            vkCmdDrawIndexed(commandBuffer, model->getIndexCount(), 1, 0, 0, 0);
+            return pushData.model;
+        };
+        if (entities.empty()) return;
+        auto traverse = [&](auto&& self, Entity* entity, glm::mat4 prevModel) -> void {
+            auto currentModelOpt = renderEntity(entity, prevModel);
+            glm::mat4 currentModel = prevModel;
+            if (currentModelOpt.has_value()) {
+                currentModel = currentModelOpt.value();
+            }
+            for (Entity* child : entity->getChildren()) {
+                self(self, child, currentModel);
+            }
+        };
+        for (auto& [name, entity] : entities) {
+            if (entity->getParent() == nullptr) {
+                traverse(traverse, entity, glm::mat4(1.0f));
+            }
+        }
     }
     void Renderer::renderUI(VkCommandBuffer commandBuffer){
         Shader* uiShader = getShaderManager()->getShader("ui");

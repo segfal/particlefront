@@ -9,9 +9,14 @@ ModelManager::ModelManager() {
 }
 
 ModelManager::~ModelManager() {
+    shutdown();
+}
+
+void ModelManager::shutdown() {
     for (auto& pair : models) {
         delete pair.second;
     }
+    models.clear();
 }
 
 void ModelManager::loadModels(std::string path, std::string prevName) {
@@ -33,4 +38,11 @@ void ModelManager::loadModels(std::string path, std::string prevName) {
             loadModels(entry.path().string(), name + "_");
         }
     }
+}
+
+Model* ModelManager::getModel(const std::string& name) {
+    if (models.find(name) != models.end()) {
+        return models[name];
+    }
+    return nullptr;
 }
