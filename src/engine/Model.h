@@ -16,6 +16,7 @@ public:
     VkBuffer getIndexBuffer() const { return indexBuffer; }
     const uint32_t getIndexCount() const { return static_cast<uint32_t>(indices.size()); }
 private:
+    Renderer* renderer = nullptr;
     std::string name;
     std::vector<float> vertices;
     std::vector<uint32_t> indices;

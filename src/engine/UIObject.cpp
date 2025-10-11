@@ -7,6 +7,7 @@
 
 UIObject::~UIObject() {
     for (auto& entry : children) {
+        entry.second->parent = nullptr;
         delete entry.second;
     }
     children.clear();
@@ -17,6 +18,7 @@ void UIObject::addChild(UIObject* child) {
         return;
     }
     children[child->getName()] = child;
+    child->parent = this;
 }
 
 void UIObject::removeChild(UIObject* child) {
@@ -25,6 +27,7 @@ void UIObject::removeChild(UIObject* child) {
     }
     auto it = children.find(child->getName());
     if (it != children.end()) {
+        it->second->parent = nullptr;
         delete it->second;
         children.erase(it);
     }

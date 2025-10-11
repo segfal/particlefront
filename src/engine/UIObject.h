@@ -19,6 +19,7 @@ private:
     glm::ivec2 corner;
     std::string texture;
     std::vector<VkDescriptorSet> descriptorSets;
+    UIObject* parent = nullptr;
     bool enabled = true;
     
 public:
@@ -50,6 +51,7 @@ public:
 
     void addChild(UIObject *child);
     void removeChild(UIObject *child);
+    UIObject* getParent() const { return parent; }
 };
 
 class TextObject : public UIObject {

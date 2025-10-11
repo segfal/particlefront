@@ -36,13 +36,14 @@
 #include "Model.h"
 #include "UIObject.h"
 #include "TextObject.h"
+#include "Camera.h"
 #include "../utils.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 #define PI 3.14159265358979323846
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = static_cast<int>(Renderer::kMaxFramesInFlight);
 uint32_t currentFrame = 0;
 
 const std::vector<const char*> validationLayers = {
@@ -77,8 +78,8 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 struct Vertex {
     glm::vec3 pos;
-    glm::vec2 texCoord;
     glm::vec3 normal;
+    glm::vec2 texCoord;
     static VkVertexInputBindingDescription getBindingDescription(){
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
@@ -464,51 +465,70 @@ struct TextVertex{
         }
         const uint32_t vertexBindingCountClamped = vertexBindingCount > 0 ? static_cast<uint32_t>(vertexBindingCount) : 0u;
         const uint32_t fragmentBindingCountClamped = fragmentBindingCount > 0 ? static_cast<uint32_t>(fragmentBindingCount) : 0u;
+        const size_t expectedUniformBuffers = static_cast<size_t>(vertexBindingCountClamped) * static_cast<size_t>(MAX_FRAMES_IN_FLIGHT);
+        if (vertexBindingCountClamped > 0 && uniformBuffers.size() < expectedUniformBuffers) {
+            throw std::runtime_error("insufficient uniform buffers supplied for descriptor allocation");
+        }
+        const size_t expectedTextures = static_cast<size_t>(fragmentBindingCountClamped);
+        if (fragmentBindingCountClamped > 0 && textures.size() < expectedTextures) {
+            throw std::runtime_error("insufficient textures supplied for descriptor allocation");
+        }
+
+        std::vector<VkDescriptorBufferInfo> bufferInfos;
+        bufferInfos.reserve(expectedUniformBuffers);
+        std::vector<VkDescriptorImageInfo> imageInfos;
+        imageInfos.reserve(static_cast<size_t>(fragmentBindingCountClamped) * static_cast<size_t>(MAX_FRAMES_IN_FLIGHT));
         std::vector<VkWriteDescriptorSet> descriptorWrites;
         descriptorWrites.reserve(static_cast<size_t>(vertexBindingCountClamped + fragmentBindingCountClamped) * static_cast<size_t>(MAX_FRAMES_IN_FLIGHT));
-        for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame) {
-            const size_t uniformLimit = std::min<std::size_t>(vertexBindingCountClamped, uniformBuffers.size());
-            for (size_t u = 0; u < uniformLimit; ++u) {
-                VkDescriptorBufferInfo bufferInfo = {
-                    .buffer = uniformBuffers[u],
+
+        for (uint32_t frame = 0; frame < static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT); ++frame) {
+            for (uint32_t u = 0; u < vertexBindingCountClamped; ++u) {
+                const size_t bufferIndex = static_cast<size_t>(frame) * vertexBindingCountClamped + u;
+                VkBuffer bufferHandle = uniformBuffers[bufferIndex];
+                if (bufferHandle == VK_NULL_HANDLE) {
+                    throw std::runtime_error("uniform buffer handle is null during descriptor allocation");
+                }
+                bufferInfos.push_back({
+                    .buffer = bufferHandle,
                     .offset = 0,
                     .range = VK_WHOLE_SIZE,
-                };
+                });
                 VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = descriptorSets[frame],
-                    .dstBinding = static_cast<uint32_t>(u),
+                    .dstBinding = u,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .pBufferInfo = &bufferInfo,
+                    .pBufferInfo = &bufferInfos.back(),
                 };
                 descriptorWrites.push_back(write);
             }
-            const size_t textureLimit = std::min<std::size_t>(fragmentBindingCountClamped, textures.size());
-            for (size_t t = 0; t < textureLimit; ++t) {
+            for (uint32_t t = 0; t < fragmentBindingCountClamped; ++t) {
                 Image* img = textures[t];
-                if (!img) {
-                    continue;
+                if (!img || img->imageView == VK_NULL_HANDLE) {
+                    throw std::runtime_error("texture image view is null during descriptor allocation");
                 }
-                VkDescriptorImageInfo imageInfo = {
+                imageInfos.push_back({
                     .sampler = textureSampler,
                     .imageView = img->imageView,
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                };
+                });
                 VkWriteDescriptorSet write = {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstSet = descriptorSets[frame],
-                    .dstBinding = vertexBindingCountClamped + static_cast<uint32_t>(t),
+                    .dstBinding = vertexBindingCountClamped + t,
                     .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .pImageInfo = &imageInfo,
+                    .pImageInfo = &imageInfos.back(),
                 };
                 descriptorWrites.push_back(write);
             }
         }
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        if (!descriptorWrites.empty()) {
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        }
         return descriptorSets;
     }
     void Renderer::createCommandBuffers() {
@@ -1284,9 +1304,11 @@ struct TextVertex{
     void Renderer::renderEntities(VkCommandBuffer commandBuffer) {
         auto& entities = entityManager->getAllEntities();
         glm::vec3 cameraPos = glm::vec3(0.0f);
+        float cameraFOV = 45.0f;
         if (entities.find("camera") != entities.end()) {
-            Entity* cameraEntity = entities["camera"];
+            Camera* cameraEntity = dynamic_cast<Camera*>(entities["camera"]);
             cameraPos = cameraEntity->getPosition();
+            cameraFOV = cameraEntity->getFOV();
         }
         auto renderEntity = [&](Entity* entity, glm::mat4 prevModel) -> std::optional<glm::mat4> {
             std::string shaderName = entity->getShader();
@@ -1302,34 +1324,40 @@ struct TextVertex{
                 return std::nullopt;
             }
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline);
-            VkDeviceSize offsets[] = {0};
-            std::vector<VkDescriptorSet> descriptorSets = entity->getDescriptorSets();
+            const uint32_t indexCount = model->getIndexCount();
+            if (indexCount == 0) {
+                return std::nullopt;
+            }
             VkBuffer vertexBuffer = model->getVertexBuffer();
             VkBuffer indexBuffer = model->getIndexBuffer();
+            if (vertexBuffer == VK_NULL_HANDLE || indexBuffer == VK_NULL_HANDLE) {
+                return std::nullopt;
+            }
+            VkDeviceSize offsets[] = {0};
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-            if (vertexBuffer == VK_NULL_HANDLE || indexBuffer == VK_NULL_HANDLE) return;
-            if (descriptorSets.size() == MAX_FRAMES_IN_FLIGHT) {
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+            std::vector<VkDescriptorSet> descriptorSets = entity->getDescriptorSets();
+            if (descriptorSets.size() != MAX_FRAMES_IN_FLIGHT || descriptorSets[currentFrame] == VK_NULL_HANDLE) {
+                return std::nullopt;
             }
-            struct alignas(16) PBRPushConstants {
-                glm::mat4 model = glm::mat4(1.0f);
-                glm::mat4 view = glm::mat4(1.0f);
-                glm::mat4 proj = glm::mat4(1.0f);
-                glm::vec3 cameraPos = cameraPos;
-                float padding;
-            } pushData;
-            pushData.model = prevModel;
+            UniformBufferObject ubo{};
+            ubo.model = prevModel;
             glm::vec3 position = entity->getPosition();
             glm::vec3 scale = entity->getScale();
             glm::vec3 rotation = entity->getRotation();
-            pushData.model = glm::translate(pushData.model, position);
-            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            pushData.model = glm::rotate(pushData.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            pushData.model = glm::scale(pushData.model, scale);
-            vkCmdDrawIndexed(commandBuffer, model->getIndexCount(), 1, 0, 0, 0);
-            return pushData.model;
+            ubo.model = glm::translate(ubo.model, position);
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.model = glm::scale(ubo.model, scale);
+            ubo.view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            ubo.proj = glm::perspective(glm::radians(cameraFOV), (float) swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 100.0f);
+            ubo.proj[1][1] *= -1;
+            ubo.cameraPos = cameraPos;
+            entity->updateUniformBuffer(currentFrame, ubo);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+            vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+            return ubo.model;
         };
         if (entities.empty()) return;
         auto traverse = [&](auto&& self, Entity* entity, glm::mat4 prevModel) -> void {
@@ -1358,8 +1386,6 @@ struct TextVertex{
         } pushData;
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipeline);
         VkDeviceSize offsets[] = {0};
-        UIObject* root = uiManager->getUIObject("mainContainer");
-        if(!root) return;
         VkBuffer vb = quadVertexBuffer;
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vb, offsets);
         vkCmdBindIndexBuffer(commandBuffer, quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
@@ -1547,7 +1573,11 @@ struct TextVertex{
         };
 
         LayoutRect rootDesignRect{glm::vec2(0.0f), designResolution};
-        traverse(traverse, root, rootDesignRect);
+        for (auto& [name, obj] : uiManager->getUIObjects()) {
+            if (obj->getParent() == nullptr) {
+                traverse(traverse, obj, rootDesignRect);
+            }
+        }
     }
     void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         VkCommandBufferBeginInfo beginInfo = {
@@ -1588,6 +1618,7 @@ struct TextVertex{
             .extent = swapChainExtent,
         };
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        renderEntities(commandBuffer);
         renderUI(commandBuffer);
         vkCmdEndRenderPass(commandBuffer);
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

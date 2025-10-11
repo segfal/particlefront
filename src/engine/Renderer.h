@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 struct GLFWwindow;
 class UIManager;
@@ -29,6 +30,7 @@ struct SwapChainSupportDetails {
 
 class Renderer {
 public:
+    static constexpr uint32_t kMaxFramesInFlight = 2;
     VkDevice device;
 
     Renderer();
@@ -58,6 +60,7 @@ public:
 
     VkDevice getDevice() const { return device; }
     ShaderManager* getShaderManager() const;
+    uint32_t getFramesInFlight() const { return kMaxFramesInFlight; }
 
 private:
     void initWindow();

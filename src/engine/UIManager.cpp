@@ -43,6 +43,10 @@ UIManager* UIManager::getInstance() {
     return &instance;
 }
 
+std::map<std::string, UIObject*>& UIManager::getUIObjects() {
+    return uiObjects;
+}
+
 unsigned int UIManager::getUIObjectCount() {
     return static_cast<unsigned int>(getInstance()->uiObjects.size());
 }

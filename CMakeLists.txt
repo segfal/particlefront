@@ -138,6 +138,7 @@ if(IS_MACOS)
         ${Vulkan_LIBRARIES} 
         glfw
         ${FREETYPE_LIBRARIES}
+        fastgltf::fastgltf
         "-framework Cocoa"
         "-framework IOKit"
         "-framework CoreVideo"
@@ -168,7 +169,7 @@ elseif(IS_WINDOWS)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
     add_subdirectory(${CMAKE_SOURCE_DIR}/include/glfw)
 
-    target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} glfw ${FREETYPE_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} glfw ${FREETYPE_LIBRARIES} fastgltf::fastgltf)
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${FREETYPE_INCLUDE_DIRS}
     )
@@ -193,8 +194,9 @@ else() # Linux
 
     target_link_libraries(${PROJECT_NAME}
         Vulkan::Vulkan
-    glfw
+        glfw
         ${FREETYPE_LIBRARIES}
+        fastgltf::fastgltf
     )
     target_include_directories(${PROJECT_NAME} PRIVATE
     ${FREETYPE_INCLUDE_DIRS}

@@ -17,6 +17,7 @@ public:
     void addUIObject(UIObject* obj);
     void removeUIObject(UIObject* obj);
     UIObject* getUIObject(const std::string& name);
+    std::map<std::string, UIObject*>& getUIObjects();
     void clear();
 
     static UIManager* getInstance();

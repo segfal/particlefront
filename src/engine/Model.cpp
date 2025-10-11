@@ -1,12 +1,14 @@
 #pragma once
 #include "Model.h"
+#include "Renderer.h"
 #include <iostream>
+#include <filesystem>
 #include <fstream>
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
 #include <glm/glm.hpp>
-#include "Renderer.h"
+#include <vulkan/vulkan.h>
 
 struct GeoSurface {
     uint32_t startIndex;
@@ -14,19 +16,24 @@ struct GeoSurface {
 };
 
 void Model::loadFromFile(const std::string& path) {
-    fastgltf::GltfDataBuffer data;
-    data.FromPath(path);
-    fastgltf::Asset gltf;
+    const std::filesystem::path modelPath(path);
+    auto dataResult = fastgltf::GltfDataBuffer::FromPath(modelPath);
+    if (!dataResult) {
+        std::cerr << "Failed to open glTF file: " << path << " Error: "
+                  << fastgltf::getErrorName(dataResult.error()) << std::endl;
+        return;
+    }
+    fastgltf::GltfDataBuffer data = std::move(dataResult.get());
     fastgltf::Parser parser{};
     constexpr auto gltfOptions = fastgltf::Options::LoadGLBBuffers
         | fastgltf::Options::LoadExternalBuffers;
-    auto load = parser.loadGltfBinary(data, path, gltfOptions);
-    if (load) {
-        gltf = std::move(load.get());
-    } else {
-        std::cerr<< "Failed to load glTF file: " << path << " Error: " << static_cast<std::uint64_t>(load.error()) << std::endl;
+    auto load = parser.loadGltfBinary(data, modelPath.parent_path(), gltfOptions);
+    if (!load) {
+        std::cerr << "Failed to load glTF file: " << path << " Error: "
+                  << fastgltf::getErrorName(load.error()) << std::endl;
         return;
     }
+    fastgltf::Asset gltf = std::move(load.get());
     if (gltf.meshes.empty()) {
         std::cerr << "No meshes found in glTF file: " << path << std::endl;
         return;
@@ -95,24 +102,31 @@ void Model::loadFromFile(const std::string& path) {
                 });
         }
     }
-    Renderer::Renderer* renderer = Renderer::getInstance();
+    if (vertices.empty() || indices.empty()) {
+        std::cerr << "Model " << name << " contains no vertex/index data after loading " << path << std::endl;
+        return;
+    }
+    renderer = Renderer::getInstance();
     renderer->createBuffer(vertices.size() * sizeof(float), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
     renderer->createBuffer(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
     VkBuffer stagingVertexBuffer;
     VkDeviceMemory stagingVertexBufferMemory;
-    renderer->createBuffer(vertices.size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingVertexBuffer, stagingVertexBufferMemory);
-    void* data;
-    vkMapMemory(renderer->getDevice(), stagingVertexBufferMemory, 0, vertices.size() * sizeof(float), 0, &data);
-    memcpy(data, vertices.data(), vertices.size() * sizeof(float));
+    VkDeviceSize vertexBufferSize = vertices.size() * sizeof(float);
+    renderer->createBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingVertexBuffer, stagingVertexBufferMemory);
+    void* stagingData = nullptr;
+    vkMapMemory(renderer->getDevice(), stagingVertexBufferMemory, 0, vertexBufferSize, 0, &stagingData);
+    memcpy(stagingData, vertices.data(), vertexBufferSize);
     vkUnmapMemory(renderer->getDevice(), stagingVertexBufferMemory);
-    renderer->copyBuffer(stagingVertexBuffer, vertexBuffer, vertices.size() * sizeof(float));
+    renderer->copyBuffer(stagingVertexBuffer, vertexBuffer, vertexBufferSize);
     VkBuffer stagingIndexBuffer;
     VkDeviceMemory stagingIndexBufferMemory;
-    renderer->createBuffer(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingIndexBuffer, stagingIndexBufferMemory);
-    vkMapMemory(renderer->getDevice(), stagingIndexBufferMemory, 0, indices.size() * sizeof(uint32_t), 0, &data);
-    memcpy(data, indices.data(), indices.size() * sizeof(uint32_t));
+    VkDeviceSize indexBufferSize = indices.size() * sizeof(uint32_t);
+    renderer->createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingIndexBuffer, stagingIndexBufferMemory);
+    stagingData = nullptr;
+    vkMapMemory(renderer->getDevice(), stagingIndexBufferMemory, 0, indexBufferSize, 0, &stagingData);
+    memcpy(stagingData, indices.data(), indexBufferSize);
     vkUnmapMemory(renderer->getDevice(), stagingIndexBufferMemory);
-    renderer->copyBuffer(stagingIndexBuffer, indexBuffer, indices.size() * sizeof(uint32_t));
+    renderer->copyBuffer(stagingIndexBuffer, indexBuffer, indexBufferSize);
     vkDestroyBuffer(renderer->getDevice(), stagingIndexBuffer, nullptr);
     vkFreeMemory(renderer->getDevice(), stagingIndexBufferMemory, nullptr);
     vkDestroyBuffer(renderer->getDevice(), stagingVertexBuffer, nullptr);
