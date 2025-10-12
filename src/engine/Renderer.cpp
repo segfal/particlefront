@@ -1069,7 +1069,7 @@ struct TextVertex{
         VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
         VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
         uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-        if(swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
             imageCount = swapChainSupport.capabilities.maxImageCount;
         }
         VkSwapchainCreateInfoKHR createInfo = {
@@ -1092,14 +1092,14 @@ struct TextVertex{
             indices.graphicsFamily.value(),
             indices.presentFamily.value()
         };
-        if(indices.graphicsFamily != indices.presentFamily) {
+        if (indices.graphicsFamily != indices.presentFamily) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
         } else {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
-        if(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
+        if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
             throw std::runtime_error("failed to create swap chain!");
         }
         vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
@@ -1244,9 +1244,9 @@ struct TextVertex{
         for(VkFormat format : candidates) {
             VkFormatProperties props;
             vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
-            if(tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
                 return format;
-            } else if(tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+            } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
                 return format;
             }
         }
@@ -1406,7 +1406,15 @@ struct TextVertex{
         pixelToNdc[3][1] = 1.0f;
 
         auto drawUIObject = [&](UIObject* uiObj, const LayoutRect& rect) {
-            const auto& sets = uiObj->getDescriptorSets();
+            auto const& initialSets = uiObj->getDescriptorSets();
+            const std::vector<VkDescriptorSet>* activeSets = &initialSets;
+
+            if (initialSets.size() != MAX_FRAMES_IN_FLIGHT && !uiObj->getTexture().empty()) {
+                uiObj->loadTexture();
+                activeSets = &uiObj->getDescriptorSets();
+            }
+
+            const auto& sets = *activeSets;
             if (sets.size() != MAX_FRAMES_IN_FLIGHT) return;
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiShader->pipelineLayout, 0, 1, &sets[currentFrame], 0, nullptr);
             glm::vec2 center = rect.pos + rect.size * 0.5f;
