@@ -36,6 +36,7 @@
 #include "Model.h"
 #include "UIObject.h"
 #include "TextObject.h"
+#include "ButtonObject.h"
 #include "Camera.h"
 #include "../utils.h"
 
@@ -1324,6 +1325,23 @@ struct TextVertex{
                 return std::nullopt;
             }
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline);
+
+            UniformBufferObject ubo{};
+            ubo.model = prevModel;
+            glm::vec3 position = entity->getPosition();
+            glm::vec3 scale = entity->getScale();
+            glm::vec3 rotation = entity->getRotation();
+            ubo.model = glm::translate(ubo.model, position);
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.model = glm::scale(ubo.model, scale);
+            ubo.view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            ubo.proj = glm::perspective(glm::radians(cameraFOV), (float) swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 100.0f);
+            ubo.proj[1][1] *= -1;
+            ubo.cameraPos = cameraPos;
+            entity->updateUniformBuffer(currentFrame, ubo);
+
             const uint32_t indexCount = model->getIndexCount();
             if (indexCount == 0) {
                 return std::nullopt;
@@ -1340,21 +1358,6 @@ struct TextVertex{
             if (descriptorSets.size() != MAX_FRAMES_IN_FLIGHT || descriptorSets[currentFrame] == VK_NULL_HANDLE) {
                 return std::nullopt;
             }
-            UniformBufferObject ubo{};
-            ubo.model = prevModel;
-            glm::vec3 position = entity->getPosition();
-            glm::vec3 scale = entity->getScale();
-            glm::vec3 rotation = entity->getRotation();
-            ubo.model = glm::translate(ubo.model, position);
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.model = glm::scale(ubo.model, scale);
-            ubo.view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            ubo.proj = glm::perspective(glm::radians(cameraFOV), (float) swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 100.0f);
-            ubo.proj[1][1] *= -1;
-            ubo.cameraPos = cameraPos;
-            entity->updateUniformBuffer(currentFrame, ubo);
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
             vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
             return ubo.model;
@@ -1391,59 +1394,11 @@ struct TextVertex{
         vkCmdBindIndexBuffer(commandBuffer, quadIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         const glm::vec2 swapExtentF(static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height));
-        struct LayoutRect {
-            glm::vec2 pos;
-            glm::vec2 size;
-        };
         constexpr glm::vec2 designResolution(800.0f, 600.0f);
         float layoutScale = std::max(uiScale, 0.0001f);
         glm::vec2 canvasSize = designResolution * layoutScale;
         glm::vec2 canvasOrigin = 0.5f * (swapExtentF - canvasSize);
 
-        auto convertComponent = [&](float value, float parentReference) -> float {
-            if (std::abs(value) <= 1.0f) {
-                return value * parentReference;
-            }
-            return value;
-        };
-        auto resolveDesignRect = [&](UIObject* obj, const LayoutRect& parentRect) -> LayoutRect {
-            glm::vec2 sizeInput = obj->getSize();
-            glm::vec2 sizeDesign(
-                convertComponent(sizeInput.x, parentRect.size.x),
-                convertComponent(sizeInput.y, parentRect.size.y)
-            );
-            sizeDesign = glm::max(sizeDesign, glm::vec2(1.0f));
-
-            glm::vec2 offset(
-                convertComponent(obj->getPosition().x, parentRect.size.x),
-                convertComponent(obj->getPosition().y, parentRect.size.y)
-            );
-
-            glm::vec2 topLeft(parentRect.pos);
-            const glm::ivec2 corner = obj->getCorner();
-            if (corner.x == 2) {
-                topLeft.x += parentRect.size.x - offset.x - sizeDesign.x;
-            } else if (corner.x == 1) {
-                topLeft.x += (parentRect.size.x - sizeDesign.x) * 0.5f + offset.x;
-            } else {
-                topLeft.x += offset.x;
-            }
-            if (corner.y == 2) {
-                topLeft.y += parentRect.size.y - offset.y - sizeDesign.y;
-            } else if (corner.y == 1) {
-                topLeft.y += (parentRect.size.y - sizeDesign.y) * 0.5f + offset.y;
-            } else {
-                topLeft.y += offset.y;
-            }
-
-            return {topLeft, sizeDesign};
-        };
-        auto toPixelRect = [&](const LayoutRect& designRect) -> LayoutRect {
-            LayoutRect pixelRect;
-            pixelRect.pos = canvasOrigin + designRect.pos * layoutScale;
-            pixelRect.size = glm::max(designRect.size * layoutScale, glm::vec2(1.0f));
-            return pixelRect;
-        };
         glm::mat4 pixelToNdc(1.0f);
         pixelToNdc[0][0] = 2.0f / std::max(swapExtentF.x, 1.0f);
         pixelToNdc[1][1] = -2.0f / std::max(swapExtentF.y, 1.0f);
@@ -1557,13 +1512,13 @@ struct TextVertex{
 
             if (auto* textNode = dynamic_cast<TextObject*>(node)) {
                 LayoutRect designRect = resolveDesignRect(textNode, parentDesignRect);
-                LayoutRect pixelRect = toPixelRect(designRect);
+                LayoutRect pixelRect = toPixelRect(designRect, canvasOrigin, layoutScale);
                 drawTextObject(textNode, designRect, pixelRect);
                 return;
             }
 
             LayoutRect designRect = resolveDesignRect(node, parentDesignRect);
-            LayoutRect pixelRect = toPixelRect(designRect);
+            LayoutRect pixelRect = toPixelRect(designRect, canvasOrigin, layoutScale);
             drawUIObject(node, pixelRect);
             for (auto& childEntry : node->children) {
                 if (UIObject* child = childEntry.second) {
@@ -1876,7 +1831,10 @@ struct TextVertex{
                 return;
             }
             lastClickTime = currentTime;
-            // click logic for hovered element
+            
+            if (app->hoveredObject) {
+                app->hoveredObject->onClick();
+            }
         }
         wasPressed = isPressed;
         if(!isPressed) app->firstMouse = true;
@@ -1887,4 +1845,51 @@ struct TextVertex{
     }
     void Renderer::mouseMoveCallback(GLFWwindow* window, double xpos, double ypos) {
         auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+
+        const glm::vec2 swapExtentF(static_cast<float>(app->swapChainExtent.width), static_cast<float>(app->swapChainExtent.height));
+        constexpr glm::vec2 designResolution(800.0f, 600.0f);
+        float layoutScale = std::max(app->uiScale, 0.0001f);
+        glm::vec2 canvasSize = designResolution * layoutScale;
+        glm::vec2 canvasOrigin = 0.5f * (swapExtentF - canvasSize);
+
+        glm::vec2 mousePosF(static_cast<float>(xpos), static_cast<float>(ypos));
+        mousePosF.y = swapExtentF.y - mousePosF.y;
+
+        bool foundHover = false;
+        auto traverse = [&](auto&& self, UIObject* node, const LayoutRect& parentDesignRect) -> void {
+            if (!node || !node->isEnabled()) return;
+
+            if (auto* textNode = dynamic_cast<TextObject*>(node)) {
+                return;
+            }
+
+            LayoutRect designRect = resolveDesignRect(node, parentDesignRect);
+            LayoutRect pixelRect = toPixelRect(designRect, canvasOrigin, layoutScale);
+
+            if (auto* buttonNode = dynamic_cast<ButtonObject*>(node)) {
+                bool isHovered =
+                    mousePosF.x >= pixelRect.pos.x && mousePosF.x <= (pixelRect.pos.x + pixelRect.size.x) &&
+                    mousePosF.y >= pixelRect.pos.y && mousePosF.y <= (pixelRect.pos.y + pixelRect.size.y);
+                if (isHovered) {
+                    app->hoveredObject = buttonNode;
+                    foundHover = true;
+                    return;
+                }
+            }
+
+            for (auto& childEntry : node->children) {
+                if (UIObject* child = childEntry.second) {
+                    self(self, child, designRect);
+                }
+            }
+        };
+        LayoutRect rootDesignRect{glm::vec2(0.0f), designResolution};
+        for (auto& [name, obj] : app->uiManager->getUIObjects()) {
+            if (obj->getParent() == nullptr) {
+                traverse(traverse, obj, rootDesignRect);
+            }
+        }
+        if (!foundHover) {
+            app->hoveredObject = nullptr;
+        }
     }

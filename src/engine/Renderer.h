@@ -13,6 +13,7 @@ class EntityManager;
 class ModelManager;
 class ShaderManager;
 class TextureManager;
+class ButtonObject;
 class Image;
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -150,6 +151,7 @@ private:
     TextureManager* textureManager = nullptr;
     ModelManager* modelManager = nullptr;
     EntityManager* entityManager = nullptr;
+    ButtonObject* hoveredObject = nullptr;
     bool framebufferResized = false;
     bool firstMouse = true;
     float uiScale = 1.0f;

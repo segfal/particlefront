@@ -6,9 +6,9 @@
 #include <vector>
 
 UIObject::~UIObject() {
-    for (auto& entry : children) {
-        entry.second->parent = nullptr;
-        delete entry.second;
+    for (auto& [name, child] : children) {
+        child->parent = nullptr;
+        delete child;
     }
     children.clear();
 }

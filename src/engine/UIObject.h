@@ -43,6 +43,7 @@ public:
     const glm::vec2 &getSize() const { return size; }
     const glm::ivec2 &getCorner() const { return corner; }
     bool isEnabled() const { return enabled; }
+    void setEnabled(bool en) { enabled = en; }
     const std::string &getTexture() const { return texture; }
 
     void loadTexture();
@@ -52,20 +53,4 @@ public:
     void addChild(UIObject *child);
     void removeChild(UIObject *child);
     UIObject* getParent() const { return parent; }
-};
-
-class TextObject : public UIObject {
-public:
-    TextObject(
-        std::string text,
-        std::string font,
-        glm::vec2 position,
-        glm::vec2 size,
-        glm::ivec2 corner,
-        std::string name,
-        glm::vec3 color
-    );
-    std::string text;
-    std::string font;
-    glm::vec3 color;
 };
