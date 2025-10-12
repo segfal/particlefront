@@ -16,6 +16,7 @@
 #include <set>
 #include <map>
 #include <cstdint>
+#include <string>
 #include <limits>
 #include <algorithm>
 #include <array>
@@ -922,13 +923,19 @@ struct TextVertex{
             throw std::runtime_error("failed to present swap chain image!");
         }
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+void Renderer::createInstance() {
+    if(!glfwVulkanSupported()) {
+        throw std::runtime_error(
+            "GLFW reports that Vulkan is unavailable. Ensure the Vulkan SDK/MoltenVK is installed and "
+            "relaunch the application with VK_ICD_FILENAMES pointing at MoltenVK_icd.json."
+        );
     }
-    void Renderer::createInstance() {
-        if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
-        }
-        VkApplicationInfo appInfo = {
-            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    if (enableValidationLayers && !checkValidationLayerSupport()) {
+        throw std::runtime_error("validation layers requested, but not available!");
+    }
+    VkApplicationInfo appInfo = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pApplicationName = "ParticleFront",
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
@@ -968,8 +975,15 @@ struct TextVertex{
         }
     }
     void Renderer::createSurface() {
-        if(glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
+        if(!window) {
+            throw std::runtime_error("GLFW window was not created before attempting to create a Vulkan surface.");
+        }
+        VkResult result = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+        if(result != VK_SUCCESS) {
+            throw std::runtime_error(
+                "Failed to create Vulkan window surface (VkResult " + std::to_string(static_cast<int32_t>(result)) +
+                "). Ensure MoltenVK is installed and discoverable via VK_ICD_FILENAMES."
+            );
         }
     }
     void Renderer::pickPhysicalDevice() {
