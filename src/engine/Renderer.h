@@ -13,7 +13,9 @@ class EntityManager;
 class ModelManager;
 class ShaderManager;
 class TextureManager;
+class InputManager;
 class ButtonObject;
+class Camera;
 class Image;
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -56,12 +58,17 @@ public:
     void createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange = nullptr, bool enableDepth = true, bool useTextVertex = false);
     void createCommandBuffers();
     void createSyncObjects();
+    void setUIMode(bool enabled);
+    void setActiveCamera(Camera* camera);
+    Camera* getActiveCamera() const { return activeCamera; }
     void createTextureSampler();
     void createTextureSampler(VkSampler &sampler, uint32_t mipLevels = 1);
 
     VkDevice getDevice() const { return device; }
     ShaderManager* getShaderManager() const;
     uint32_t getFramesInFlight() const { return kMaxFramesInFlight; }
+    bool isCursorLocked() const { return cursorLocked; }
+    bool isUIMode() const { return uiMode; }
 
 private:
     void initWindow();
@@ -87,6 +94,7 @@ private:
     void createQuadBuffers();
     void setupUI();
     void renderUI(VkCommandBuffer commandBuffer);
+    void updateEntities();
     void renderEntities(VkCommandBuffer commandBuffer);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void createColorResources();
@@ -151,10 +159,16 @@ private:
     TextureManager* textureManager = nullptr;
     ModelManager* modelManager = nullptr;
     EntityManager* entityManager = nullptr;
+    InputManager* inputManager = nullptr;
     ButtonObject* hoveredObject = nullptr;
     bool framebufferResized = false;
     bool firstMouse = true;
+    bool cursorLocked = false;
+    bool uiMode = true;
     float uiScale = 1.0f;
     float textScale = 1.0f;
     float textSizeScale = 1.0f;
+    float deltaTime = 0.0f;
+    float currentTime = 0.0f;
+    Camera* activeCamera = nullptr;
 };

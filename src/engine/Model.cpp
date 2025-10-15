@@ -107,8 +107,20 @@ void Model::loadFromFile(const std::string& path) {
         return;
     }
     renderer = Renderer::getInstance();
-    renderer->createBuffer(vertices.size() * sizeof(float), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
-    renderer->createBuffer(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+    renderer->createBuffer(
+        vertices.size() * sizeof(float),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        vertexBuffer,
+        vertexBufferMemory
+    );
+    renderer->createBuffer(
+        indices.size() * sizeof(uint32_t),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        indexBuffer,
+        indexBufferMemory
+    );
     VkBuffer stagingVertexBuffer;
     VkDeviceMemory stagingVertexBufferMemory;
     VkDeviceSize vertexBufferSize = vertices.size() * sizeof(float);

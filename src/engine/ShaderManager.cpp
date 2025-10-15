@@ -68,6 +68,7 @@ ShaderManager* ShaderManager::getInstance() {
                 .offset = 0,
                 .size = sizeof(UniformBufferObject),
             },
+            .poolMultiplier = 256,
             .vertexBitBindings = 1,
             .fragmentBitBindings = 4,
         },
