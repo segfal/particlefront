@@ -14,6 +14,7 @@
 #include "Prefabs/Player.h"
 #include "../engine/Camera.h"
 #include "../engine/Renderer.h"
+#include "../engine/CollisionBox.h"
 #include "Scenes.h"
 
 #define PI 3.14159265358979323846
@@ -32,16 +33,24 @@ void MainMenu() {
 void Scene1() {
     Renderer::getInstance()->setUIMode(false);
     EntityManager* entityMgr = EntityManager::getInstance();
-    Entity* exampleEntity = new Entity("exampleCube", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
+    Entity* exampleEntity = new Entity("exampleCube", "pbr", {0.0f, 1.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
     exampleEntity->setModel(ModelManager::getInstance()->getModel("cube"));
+    CollisionBox* box1 = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity->getName(), {1.0f, 1.0f, 1.0f});
+    exampleEntity->addChild(box1);
     entityMgr->addEntity("exampleCube", exampleEntity);
-    Entity* exampleEntity2 = new Entity("exampleCube2", "pbr", {0.0f, 0.0f, -10.0f}, {0.0f, 45.0f, 0.0f});
+    Entity* exampleEntity2 = new Entity("exampleCube2", "pbr", {0.0f, 1.5f, -10.0f}, {0.0f, 45.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
     exampleEntity2->setModel(ModelManager::getInstance()->getModel("cube"));
+    CollisionBox* box2 = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity2->getName(), {1.0f, 1.0f, 1.0f});
+    exampleEntity2->addChild(box2);
     entityMgr->addEntity("exampleCube2", exampleEntity2);
 
+    Entity* floor = new Entity("floor", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {20.0f, 1.0f, 20.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
+    floor->setModel(ModelManager::getInstance()->getModel("cube"));
+    CollisionBox* floorBox = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, floor->getName(), {1.0f, 1.0f, 1.0f});
+    floor->addChild(floorBox);
+    entityMgr->addEntity("floor", floor);
 
-    Player* player = new Player({0.0f, 1.0f, -5.0f}, {0.0f, 0.0f, 0.0f});
-    player->setModel(ModelManager::getInstance()->getModel("cube"));
+    Player* player = new Player({0.0f, 5.0f, -5.0f}, {0.0f, 0.0f, 0.0f});
 
     entityMgr->addEntity("player", player);
 }

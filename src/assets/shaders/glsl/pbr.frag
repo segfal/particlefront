@@ -79,7 +79,7 @@ void main(){
     float sigma = max(max(dNdX, dNdY), max(dVdX, dVdY));
     roughness = max(roughness, sigma);
 
-    vec3 L = normalize(vec3(-1.0, -0.5, 1.0));
+    vec3 L = normalize(vec3(-1.0, 2.0, 1.0));
     vec3 H = normalize(V + L);
     float NdotL = max(dot(N, L), 0.0);
     float NdotV = max(dot(N, V), 0.0);

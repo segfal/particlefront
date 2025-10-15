@@ -884,8 +884,8 @@ struct TextVertex{
     }
     void Renderer::updateUniformBuffer(uint32_t /*currentFrame*/) {}
     void Renderer::drawFrame() {
-        deltaTime = glfwGetTime() - currentTime;
-        currentTime = glfwGetTime();
+        deltaTime = static_cast<float>(glfwGetTime()) - currentTime;
+        currentTime = static_cast<float>(glfwGetTime());
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1320,24 +1320,6 @@ struct TextVertex{
         glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
         float cameraFOV = 45.0f;
         glm::mat4 view = glm::mat4(1.0f);
-
-        auto computeWorldTransform = [](Entity* node) {
-            glm::mat4 transform(1.0f);
-            std::vector<Entity*> hierarchy;
-            for (Entity* current = node; current != nullptr; current = current->getParent()) {
-                hierarchy.push_back(current);
-            }
-            for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
-                Entity* current = *it;
-                transform = glm::translate(transform, current->getPosition());
-                glm::vec3 rot = current->getRotation();
-                transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
-                transform = glm::scale(transform, current->getScale());
-            }
-            return transform;
-        };
 
         if (activeCamera) {
             glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
