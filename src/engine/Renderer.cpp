@@ -4,6 +4,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 #include <freetype/include/ft2build.h>
@@ -36,6 +37,7 @@
 #include "Model.h"
 #include "UIObject.h"
 #include "TextObject.h"
+#include "InputManager.h"
 #include "ButtonObject.h"
 #include "Camera.h"
 #include "../utils.h"
@@ -730,6 +732,8 @@ struct TextVertex{
         glfwSetWindowUserPointer(window, this);
         glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
         glfwSetCursorPosCallback(window, mouseMoveCallback);
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        cursorLocked = false;
         float xscale = 1.0f, yscale = 1.0f;
         glfwGetWindowContentScale(window, &xscale, &yscale);
         float deviceScale = std::max(xscale, 1.0f);
@@ -860,6 +864,7 @@ struct TextVertex{
         sceneManager->switchScene(0);
         modelManager = ModelManager::getInstance();
         entityManager = EntityManager::getInstance();
+        inputManager = InputManager::getInstance();
         createColorResources();
         createDepthResources();
         createFramebuffers();
@@ -879,6 +884,8 @@ struct TextVertex{
     }
     void Renderer::updateUniformBuffer(uint32_t /*currentFrame*/) {}
     void Renderer::drawFrame() {
+        deltaTime = glfwGetTime() - currentTime;
+        currentTime = glfwGetTime();
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1302,73 +1309,90 @@ struct TextVertex{
         fontManager = FontManager::getInstance();
         fontManager->loadFont("src/assets/fonts/Lato.ttf", "Lato", 48);
     }
+    void Renderer::updateEntities() {
+        auto& entities = entityManager->getAllEntities();
+        for (auto& [name, entity] : entities) {
+            entity->update(deltaTime);
+        }
+    }
     void Renderer::renderEntities(VkCommandBuffer commandBuffer) {
         auto& entities = entityManager->getAllEntities();
-        glm::vec3 cameraPos = glm::vec3(0.0f);
+        glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
         float cameraFOV = 45.0f;
-        if (entities.find("camera") != entities.end()) {
-            Camera* cameraEntity = dynamic_cast<Camera*>(entities["camera"]);
-            cameraPos = cameraEntity->getPosition();
-            cameraFOV = cameraEntity->getFOV();
+        glm::mat4 view = glm::mat4(1.0f);
+
+        auto computeWorldTransform = [](Entity* node) {
+            glm::mat4 transform(1.0f);
+            std::vector<Entity*> hierarchy;
+            for (Entity* current = node; current != nullptr; current = current->getParent()) {
+                hierarchy.push_back(current);
+            }
+            for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
+                Entity* current = *it;
+                transform = glm::translate(transform, current->getPosition());
+                glm::vec3 rot = current->getRotation();
+                transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+                transform = glm::scale(transform, current->getScale());
+            }
+            return transform;
+        };
+
+        if (activeCamera) {
+            glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
+            glm::vec4 worldPos = cameraWorld * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            cameraPos = glm::vec3(worldPos);
+            cameraFOV = activeCamera->getFOV();
+            view = glm::inverse(cameraWorld);
         }
-        auto renderEntity = [&](Entity* entity, glm::mat4 prevModel) -> std::optional<glm::mat4> {
-            std::string shaderName = entity->getShader();
-            if (shaderName.empty()) {
-                return std::nullopt;
-            }
-            Shader* shader = shaderManager->getShader(shaderName);
-            if (shader == nullptr) {
-                return std::nullopt;
-            }
-            Model* model = entity->getModel();
-            if (!model) {
-                return std::nullopt;
-            }
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline);
 
-            UniformBufferObject ubo{};
-            ubo.model = prevModel;
-            glm::vec3 position = entity->getPosition();
-            glm::vec3 scale = entity->getScale();
+        auto renderEntity = [&](Entity* entity, const glm::mat4& parentModel) -> glm::mat4 {
+            glm::mat4 modelMatrix = parentModel;
+            modelMatrix = glm::translate(modelMatrix, entity->getPosition());
             glm::vec3 rotation = entity->getRotation();
-            ubo.model = glm::translate(ubo.model, position);
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            ubo.model = glm::rotate(ubo.model, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.model = glm::scale(ubo.model, scale);
-            ubo.view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            ubo.proj = glm::perspective(glm::radians(cameraFOV), (float) swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 100.0f);
-            ubo.proj[1][1] *= -1;
-            ubo.cameraPos = cameraPos;
-            entity->updateUniformBuffer(currentFrame, ubo);
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            modelMatrix = glm::scale(modelMatrix, entity->getScale());
 
-            const uint32_t indexCount = model->getIndexCount();
-            if (indexCount == 0) {
-                return std::nullopt;
+            std::string shaderName = entity->getShader();
+            Model* model = entity->getModel();
+            if (!shaderName.empty() && model) {
+                Shader* shader = shaderManager->getShader(shaderName);
+                if (shader) {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline);
+
+                    UniformBufferObject ubo{};
+                    ubo.model = modelMatrix;
+                    ubo.view = view;
+                    ubo.proj = glm::perspective(glm::radians(cameraFOV), static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f), 0.1f, 100.0f);
+                    ubo.proj[1][1] *= -1;
+                    ubo.cameraPos = cameraPos;
+                    entity->updateUniformBuffer(currentFrame, ubo);
+
+                    const uint32_t indexCount = model->getIndexCount();
+                    if (indexCount > 0) {
+                        VkBuffer vertexBuffer = model->getVertexBuffer();
+                        VkBuffer indexBuffer = model->getIndexBuffer();
+                        if (vertexBuffer != VK_NULL_HANDLE && indexBuffer != VK_NULL_HANDLE) {
+                            VkDeviceSize offsets[] = {0};
+                            vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
+                            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                            auto descriptorSets = entity->getDescriptorSets();
+                            if (descriptorSets.size() == MAX_FRAMES_IN_FLIGHT && descriptorSets[currentFrame] != VK_NULL_HANDLE) {
+                                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+                                vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+                            }
+                        }
+                    }
+                }
             }
-            VkBuffer vertexBuffer = model->getVertexBuffer();
-            VkBuffer indexBuffer = model->getIndexBuffer();
-            if (vertexBuffer == VK_NULL_HANDLE || indexBuffer == VK_NULL_HANDLE) {
-                return std::nullopt;
-            }
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-            std::vector<VkDescriptorSet> descriptorSets = entity->getDescriptorSets();
-            if (descriptorSets.size() != MAX_FRAMES_IN_FLIGHT || descriptorSets[currentFrame] == VK_NULL_HANDLE) {
-                return std::nullopt;
-            }
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-            vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
-            return ubo.model;
+            return modelMatrix;
         };
         if (entities.empty()) return;
-        auto traverse = [&](auto&& self, Entity* entity, glm::mat4 prevModel) -> void {
-            auto currentModelOpt = renderEntity(entity, prevModel);
-            glm::mat4 currentModel = prevModel;
-            if (currentModelOpt.has_value()) {
-                currentModel = currentModelOpt.value();
-            }
+        auto traverse = [&](auto&& self, Entity* entity, const glm::mat4& parentModel) -> void {
+            glm::mat4 currentModel = renderEntity(entity, parentModel);
             for (Entity* child : entity->getChildren()) {
                 self(self, child, currentModel);
             }
@@ -1582,6 +1606,7 @@ struct TextVertex{
         };
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
         renderEntities(commandBuffer);
+        updateEntities();
         renderUI(commandBuffer);
         vkCmdEndRenderPass(commandBuffer);
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1642,6 +1667,25 @@ struct TextVertex{
         };
         if(vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
             throw std::runtime_error("Failed to create texture sampler!");
+    }
+    void Renderer::setUIMode(bool enabled) {
+        uiMode = enabled;
+        hoveredObject = nullptr;
+        if (uiMode) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            cursorLocked = false;
+            activeCamera = nullptr;
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            cursorLocked = true;
+        }
+        firstMouse = true;
+        if (inputManager) {
+            inputManager->resetMouseDelta();
+        }
+    }
+    void Renderer::setActiveCamera(Camera* camera) {
+        activeCamera = camera;
     }
     void Renderer::createFramebuffers() {
         swapChainFramebuffers.resize(swapChainImageViews.size());
@@ -1829,23 +1873,50 @@ struct TextVertex{
     }
     void Renderer::processInput(GLFWwindow* window) {
         auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+        app->inputManager->processInput(window);
         static bool wasPressed = false;
         static double lastClickTime = 0.0;
+        static bool escapeWasPressed = false;
+
+        bool escapePressed = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+        if (escapePressed && !escapeWasPressed && app->cursorLocked) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            app->cursorLocked = false;
+            app->firstMouse = true;
+            app->inputManager->resetMouseDelta();
+        }
+        escapeWasPressed = escapePressed;
+
         bool isPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
         double currentTime = glfwGetTime();
+
+        if (!app->cursorLocked && !app->uiMode) {
+            if (isPressed && !wasPressed) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                app->cursorLocked = true;
+                app->firstMouse = true;
+                app->inputManager->resetMouseDelta();
+            }
+            wasPressed = isPressed;
+            return;
+        }
+
         if(isPressed && !wasPressed) {
             if(currentTime - lastClickTime < 0.2) {
                 wasPressed = isPressed;
                 return;
             }
             lastClickTime = currentTime;
-            
-            if (app->hoveredObject) {
+
+            if (app->hoveredObject && app->hoveredObject->onClick) {
                 app->hoveredObject->onClick();
+                app->hoveredObject = nullptr;
             }
         }
         wasPressed = isPressed;
-        if(!isPressed) app->firstMouse = true;
+        if(!isPressed) {
+            app->firstMouse = true;
+        }
     }
     void Renderer::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
         auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));

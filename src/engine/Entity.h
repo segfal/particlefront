@@ -59,6 +59,14 @@ public:
     Model* getModel() const { return model; }
     void setModel(Model* m) { model = m; }
     std::vector<Entity*>& getChildren() { return children; }
+    Entity* getChild(const std::string& name) {
+        for (auto* child : children) {
+            if (child->getName() == name) {
+                return child;
+            }
+        }
+        return nullptr;
+    }
     Entity* getParent() const { return parent; }
 
     void loadTextures() {
