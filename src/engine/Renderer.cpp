@@ -1,4 +1,4 @@
-#define GLFW_INCLUDE_VULKAN
+d#define GLFW_INCLUDE_VULKAN
 #include <glfw/include/GLFW/glfw3.h>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -886,8 +886,8 @@ struct TextVertex{
     }
     void Renderer::updateUniformBuffer(uint32_t /*currentFrame*/) {}
     void Renderer::drawFrame() {
-        deltaTime = glfwGetTime() - currentTime;
-        currentTime = glfwGetTime();
+        deltaTime = static_cast<float>(glfwGetTime()) - currentTime;
+        currentTime = static_cast<float>(glfwGetTime());
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);

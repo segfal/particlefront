@@ -6,6 +6,10 @@
 #include <filesystem>
 #include <cmath>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
+#include "engine/Entity.h"
+#include "engine/EntityManager.h"
 #include "engine/UIObject.h"
 
 inline std::filesystem::path resolvePath(const std::string& relative) {
@@ -93,4 +97,35 @@ inline LayoutRect toPixelRect(const LayoutRect& designRect, const glm::vec2& can
     pixelRect.pos = canvasOrigin + designRect.pos * layoutScale;
     pixelRect.size = glm::max(designRect.size * layoutScale, glm::vec2(1.0f));
     return pixelRect;
+}
+
+inline glm::mat4 computeWorldTransform(Entity* node) {
+    glm::mat4 transform(1.0f);
+    std::vector<Entity*> hierarchy;
+    for (Entity* current = node; current != nullptr; current = current->getParent()) {
+        hierarchy.push_back(current);
+    }
+    for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
+        Entity* current = *it;
+        transform = glm::translate(transform, current->getPosition());
+        glm::vec3 rot = current->getRotation();
+        transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        transform = glm::scale(transform, current->getScale());
+    }
+    return transform;
+}
+
+inline glm::vec3 rotatePointAroundPivot(const glm::vec3& point, const glm::vec3& pivot, const glm::vec3& rotation) {
+    if (glm::length(rotation) < 0.001f) {
+        return point;
+    }
+    glm::vec3 translatedPoint = point - pivot;
+    glm::mat4 rotMat(1.0f);
+    rotMat = glm::rotate(rotMat, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    rotMat = glm::rotate(rotMat, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    rotMat = glm::rotate(rotMat, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::vec4 rotatedPoint = rotMat * glm::vec4(translatedPoint, 1.0f);
+    return glm::vec3(rotatedPoint) + pivot;
 }

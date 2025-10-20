@@ -2,6 +2,7 @@
 #include "../../engine/CharacterEntity.h"
 #include "../../engine/InputManager.h"
 #include "../../engine/Camera.h"
+#include "../../engine/CollisionBox.h"
 #include "../../engine/Renderer.h"
 
 class Player : public CharacterEntity {
@@ -10,6 +11,8 @@ public:
         : CharacterEntity("player", "pbr", position, rotation) {
             playerCamera = new Camera({0.0f, 1.6f, 0.0f}, {0.0f, rotation.y, 0.0f}, 70.0f);
             this->addChild(playerCamera);
+            CollisionBox* box = new CollisionBox({0.0f, 0.6f, 0.0f}, {0.0f, 0.0f, 0.0f}, this->getName(), {0.5f, 1.8f, 0.5f});
+            this->addChild(box);
             Renderer::getInstance()->setActiveCamera(playerCamera);
             InputManager::getInstance()->registerListener([this](const std::vector<InputEvent>& events) { this->registerInput(events); });
         }
@@ -48,6 +51,9 @@ public:
                     case GLFW_KEY_D:
                         stopMove({1.0f, 0.0f, 0.0f});
                         break;
+                    case GLFW_KEY_SPACE:
+                        jump();
+                        break;
                     default:
                         break;
                 }
@@ -56,7 +62,7 @@ public:
                 if (!Renderer::getInstance()->isCursorLocked()) {
                     return;
                 }
-                constexpr float sensitivity = 0.02f;
+                constexpr float sensitivity = 0.05f;
                 rotate({0.0f, static_cast<float>(-event.mouseMoveEvent.x) * sensitivity, static_cast<float>(-event.mouseMoveEvent.y) * sensitivity});
             }
         }

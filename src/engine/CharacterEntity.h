@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include "Entity.h"
+#include "CollisionBox.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 class CharacterEntity : public Entity {
@@ -13,6 +14,9 @@ public:
         const glm::vec3& rotation = {0.0f, 0.0f, 0.0f}
     ) : Entity(name, shader, position, rotation) {}
     void update(float deltaTime) override {
+        bool changedPos = false;
+        bool appliedCorrection = false;
+        float previousVerticalVelocity = velocity.y;
         if (glm::length(pressed) > 0.001f) {
             glm::mat4 yawRotation = glm::rotate(glm::mat4(1.0f), glm::radians(getRotation().y), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::vec3 worldDirection = glm::vec3(yawRotation * glm::vec4(pressed, 0.0f));
@@ -20,15 +24,55 @@ public:
             const float magnitude = glm::length(worldDirection);
             if (magnitude > 0.001f) {
                 worldDirection = worldDirection / magnitude;
-                velocity = worldDirection * moveSpeed;
-                glm::vec3 newPosition = getPosition() + velocity * deltaTime;
-                setPosition(newPosition);
-                return;
+                glm::vec3 tempVelocity = worldDirection * moveSpeed;
+                glm::vec3 newPosition = getPosition() + tempVelocity * deltaTime;
+                collision moveCollision = willCollide(tempVelocity * deltaTime);
+                if (!moveCollision.box) {
+                    changedPos = true;
+                    velocity.x = tempVelocity.x;
+                    velocity.z = tempVelocity.z;
+                } else {
+                    if (glm::length(moveCollision.mtv) > 0.0f) {
+                        glm::vec3 normal = glm::normalize(moveCollision.mtv);
+                        glm::vec3 tangential = tempVelocity - glm::dot(tempVelocity, normal) * normal;
+                        velocity.x = tangential.x;
+                        velocity.z = tangential.z;
+                    } else {
+                        velocity.x = 0.0f;
+                        velocity.z = 0.0f;
+                    }
+                }
             }
         }
-        resetVelocity();
+        velocity.y = previousVerticalVelocity;
+        velocity.y -= 9.81f * deltaTime;
+        glm::vec3 newPosition = getPosition() + velocity * deltaTime;
+        collision moveResult = willCollide(velocity * deltaTime);
+        if (!moveResult.box) {
+            setPosition(newPosition);
+            changedPos = true;
+        } else if (changedPos) {
+            velocity.y = previousVerticalVelocity;
+            newPosition = getPosition() + velocity * deltaTime;
+            setPosition(newPosition);
+        }
+        collision col = willCollide(glm::vec3(0.0f));
+        if (col.box != nullptr) {
+            glm::vec3 mtv = col.mtv;
+            setPosition(getPosition() + mtv);
+            float mtvLength = glm::length(mtv);
+            if (mtvLength > 1e-5f) {
+                glm::vec3 normal = mtv / mtvLength;
+                velocity -= glm::dot(velocity, normal) * normal;
+            }
+            changedPos = true;
+            appliedCorrection = true;
+        }
+        if ((!changedPos && !appliedCorrection) || glm::length(velocity) < 1e-4f) {
+            resetVelocity();
+        }
     }
-    void move (const glm::vec3& delta) {
+    void move(const glm::vec3& delta) {
         pressed += delta;
     }
     void stopMove(const glm::vec3& delta) {
@@ -37,16 +81,22 @@ public:
             resetVelocity();
         }
     }
+    void jump() {
+        if (std::abs(velocity.y) < 0.01f) {
+            velocity.y = 10.0f;
+        }
+    }
     void resetVelocity() {
         velocity = glm::vec3(0.0f);
-        pressed = glm::vec3(0.0f);
     }
-    void rotate (const glm::vec3& delta) {
+    void rotate(const glm::vec3& delta) {
         if (delta.y != 0.0f) {
             glm::vec3 bodyRot = getRotation();
             bodyRot.y = std::fmod(bodyRot.y + delta.y, 360.0f);
             if (bodyRot.y < 0.0f) bodyRot.y += 360.0f;
-            setRotation(bodyRot);
+            if (!willCollide(glm::vec3(0.0f), bodyRot - getRotation()).box) {
+                setRotation(bodyRot);
+            }
         }
 
         if (delta.z != 0.0f) {
@@ -65,4 +115,36 @@ private:
     glm::vec3 velocity = glm::vec3(0.0f);
     glm::vec3 pressed = glm::vec3(0.0f);
     const float moveSpeed = 10.0f;
+
+    struct collision {
+        CollisionBox* box = nullptr;
+        glm::vec3 mtv = glm::vec3(0.0f);
+    };
+
+    collision willCollide(const glm::vec3& deltaPos, const glm::vec3& deltaRot = glm::vec3(0.0f)) {
+        CollisionBox* myBox = nullptr;
+        for (auto& child : this->getChildren()) {
+            myBox = dynamic_cast<CollisionBox*>(child);
+            if (myBox) break;
+        }
+        if (!myBox) {
+            return {nullptr, glm::vec3(0.0f)};
+        }
+        glm::vec3 collision = glm::vec3(0.0f);
+        EntityManager* entityMgr = EntityManager::getInstance();
+        for (const auto& [otherName, otherEntity] : entityMgr->getAllEntities()) {
+            if (otherEntity == this) continue;
+            CollisionBox* otherBox = nullptr;
+            for (auto& child : otherEntity->getChildren()) {
+                otherBox = dynamic_cast<CollisionBox*>(child);
+                if (otherBox) break;
+            }
+            if (!otherBox) continue;
+            collision = myBox->intersects(otherBox, deltaPos, deltaRot);
+            if (glm::length(collision) > 0.0f) {
+                return {otherBox, collision};
+            }
+        }
+        return {nullptr, glm::vec3(0.0f)};
+    }
 };
