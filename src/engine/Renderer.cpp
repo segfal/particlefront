@@ -41,6 +41,7 @@
 #include "InputManager.h"
 #include "ButtonObject.h"
 #include "Camera.h"
+#include "Frustrum.h"
 #include "../utils.h"
 
 const uint32_t WIDTH = 800;
@@ -1352,12 +1353,17 @@ void Renderer::createInstance() {
             }
             return transform;
         };
-
+        int totalEntities = 0;
+        int culledEntities = 0;
+        Frustum frustrum;
         if (activeCamera) {
             glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
             glm::vec4 worldPos = cameraWorld * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
             cameraPos = glm::vec3(worldPos);
             cameraFOV = activeCamera->getFOV();
+            float aspectRatio = static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f);
+            frustrum = activeCamera->getFrustrum(aspectRatio, 0.1f, 100.0f, cameraWorld);
+
             view = glm::inverse(cameraWorld);
         }
 
@@ -1369,7 +1375,14 @@ void Renderer::createInstance() {
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::scale(modelMatrix, entity->getScale());
-
+            if (activeCamera && entity->getModel()) {
+            totalEntities++;
+            AABB bounds = entity->getWorldBounds(modelMatrix);
+            if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
+                culledEntities++;
+                return modelMatrix;  // Culled: skip rendering but return transform for children
+            }
+        }
             std::string shaderName = entity->getShader();
             Model* model = entity->getModel();
             if (!shaderName.empty() && model) {
@@ -1916,13 +1929,17 @@ void Renderer::createInstance() {
         }
 
         if(isPressed && !wasPressed) {
+            std::cout << "Mouse clicked!" << std::endl;
             if(currentTime - lastClickTime < 0.2) {
+                std::cout << "Click too soon, ignoring" << std::endl;
                 wasPressed = isPressed;
                 return;
             }
             lastClickTime = currentTime;
 
+            std::cout << "Hovered object: " << (app->hoveredObject ? "yes" : "no") << std::endl;
             if (app->hoveredObject && app->hoveredObject->onClick) {
+                std::cout << "Calling onClick()" << std::endl;
                 app->hoveredObject->onClick();
                 app->hoveredObject = nullptr;
             }

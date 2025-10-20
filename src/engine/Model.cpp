@@ -1,9 +1,9 @@
-#pragma once
 #include "Model.h"
 #include "Renderer.h"
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <cfloat>
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
@@ -102,6 +102,15 @@ void Model::loadFromFile(const std::string& path) {
                 });
         }
     }
+    boundsMin = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+    boundsMax = glm::vec3(-FLT_MAX,-FLT_MAX,-FLT_MAX);
+
+    for (std::size_t i = 0; i < vertices.size(); i += floatsPerVertex){
+        glm::vec3 pos(vertices[i], vertices[i + 1], vertices[i + 2]);
+        boundsMin = glm::min(boundsMin, pos);
+        boundsMax = glm::max(boundsMax, pos);
+    }
+
     if (vertices.empty() || indices.empty()) {
         std::cerr << "Model " << name << " contains no vertex/index data after loading " << path << std::endl;
         return;
