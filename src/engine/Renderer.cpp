@@ -1,4 +1,4 @@
-d#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_VULKAN
 #include <glfw/include/GLFW/glfw3.h>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -1356,14 +1356,15 @@ void Renderer::createInstance() {
         int totalEntities = 0;
         int culledEntities = 0;
         Frustum frustrum;
+
         if (activeCamera) {
             glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
             glm::vec4 worldPos = cameraWorld * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
             cameraPos = glm::vec3(worldPos);
             cameraFOV = activeCamera->getFOV();
             float aspectRatio = static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f);
-            frustrum = activeCamera->getFrustrum(aspectRatio, 0.1f, 100.0f, cameraWorld);
 
+            frustrum = activeCamera->getFrustrum(aspectRatio, 0.1f, 100.0f, cameraWorld);
             view = glm::inverse(cameraWorld);
         }
 
@@ -1375,14 +1376,17 @@ void Renderer::createInstance() {
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::scale(modelMatrix, entity->getScale());
+
             if (activeCamera && entity->getModel()) {
-            totalEntities++;
-            AABB bounds = entity->getWorldBounds(modelMatrix);
-            if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
-                culledEntities++;
-                return modelMatrix;  // Culled: skip rendering but return transform for children
+                totalEntities++;
+                AABB bounds = entity->getWorldBounds(modelMatrix);
+                bool isVisible = frustrum.intersectsAABB(bounds.min, bounds.max);
+
+                if (!isVisible) {
+                    culledEntities++;
+                    return modelMatrix;  
+                }
             }
-        }
             std::string shaderName = entity->getShader();
             Model* model = entity->getModel();
             if (!shaderName.empty() && model) {
