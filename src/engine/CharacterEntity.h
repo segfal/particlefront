@@ -14,11 +14,6 @@ public:
         const glm::vec3& rotation = {0.0f, 0.0f, 0.0f}
     ) : Entity(name, shader, position, rotation) {}
     void update(float deltaTime) override {
-        // FIX: Clamp delta time to prevent physics explosions during frame stalls (e.g., window resize)
-        // Without this, a 2-second frame stall causes velocity.y -= 9.81 * 2.0 = -19.62, teleporting player through floor
-        const float MAX_DELTA_TIME = 0.05f;  // 50ms max = 20 FPS minimum
-        deltaTime = std::min(deltaTime, MAX_DELTA_TIME);
-
         bool changedPos = false;
         bool appliedCorrection = false;
         float previousVerticalVelocity = velocity.y;
