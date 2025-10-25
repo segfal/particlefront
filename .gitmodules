@@ -16,3 +16,6 @@
 [submodule "include/fastgltf"]
 	path = include/fastgltf
 	url = https://github.com/spnda/fastgltf
+[submodule "include/moltenvk"]
+	path = include/moltenvk
+	url = https://github.com/KhronosGroup/MoltenVK

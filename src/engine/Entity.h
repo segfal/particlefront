@@ -9,6 +9,8 @@
 #include "TextureManager.h"
 #include "ShaderManager.h"
 #include "Renderer.h"
+#include "Frustrum.h"
+#include <cfloat>
 
 class Model;
 
@@ -157,6 +159,10 @@ public:
         std::memcpy(mapped, &ubo, sizeof(UniformBufferObject));
         vkUnmapMemory(device, memory);
     }
+
+    AABB getWorldBounds(const glm::mat4& worldTransform) const;
+
+
 private:
     std::string name;
     std::string shader = "pbr";

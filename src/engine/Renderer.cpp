@@ -17,6 +17,7 @@
 #include <set>
 #include <map>
 #include <cstdint>
+#include <string>
 #include <limits>
 #include <algorithm>
 #include <array>
@@ -40,6 +41,7 @@
 #include "InputManager.h"
 #include "ButtonObject.h"
 #include "Camera.h"
+#include "Frustrum.h"
 #include "../utils.h"
 
 const uint32_t WIDTH = 800;
@@ -929,13 +931,19 @@ struct TextVertex{
             throw std::runtime_error("failed to present swap chain image!");
         }
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+void Renderer::createInstance() {
+    if(!glfwVulkanSupported()) {
+        throw std::runtime_error(
+            "GLFW reports that Vulkan is unavailable. Ensure the Vulkan SDK/MoltenVK is installed and "
+            "relaunch the application with VK_ICD_FILENAMES pointing at MoltenVK_icd.json."
+        );
     }
-    void Renderer::createInstance() {
-        if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
-        }
-        VkApplicationInfo appInfo = {
-            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    if (enableValidationLayers && !checkValidationLayerSupport()) {
+        throw std::runtime_error("validation layers requested, but not available!");
+    }
+    VkApplicationInfo appInfo = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pApplicationName = "ParticleFront",
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
@@ -975,8 +983,15 @@ struct TextVertex{
         }
     }
     void Renderer::createSurface() {
-        if(glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
+        if(!window) {
+            throw std::runtime_error("GLFW window was not created before attempting to create a Vulkan surface.");
+        }
+        VkResult result = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+        if(result != VK_SUCCESS) {
+            throw std::runtime_error(
+                "Failed to create Vulkan window surface (VkResult " + std::to_string(static_cast<int32_t>(result)) +
+                "). Ensure MoltenVK is installed and discoverable via VK_ICD_FILENAMES."
+            );
         }
     }
     void Renderer::pickPhysicalDevice() {
@@ -1321,11 +1336,34 @@ struct TextVertex{
         float cameraFOV = 45.0f;
         glm::mat4 view = glm::mat4(1.0f);
 
+        auto computeWorldTransform = [](Entity* node) {
+            glm::mat4 transform(1.0f);
+            std::vector<Entity*> hierarchy;
+            for (Entity* current = node; current != nullptr; current = current->getParent()) {
+                hierarchy.push_back(current);
+            }
+            for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
+                Entity* current = *it;
+                transform = glm::translate(transform, current->getPosition());
+                glm::vec3 rot = current->getRotation();
+                transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+                transform = glm::scale(transform, current->getScale());
+            }
+            return transform;
+        };
+        int totalEntities = 0;
+        int culledEntities = 0;
+        Frustum frustrum;
         if (activeCamera) {
             glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
             glm::vec4 worldPos = cameraWorld * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
             cameraPos = glm::vec3(worldPos);
             cameraFOV = activeCamera->getFOV();
+            float aspectRatio = static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f);
+            frustrum = activeCamera->getFrustrum(aspectRatio, 0.1f, 100.0f, cameraWorld);
+
             view = glm::inverse(cameraWorld);
         }
 
@@ -1337,7 +1375,14 @@ struct TextVertex{
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::scale(modelMatrix, entity->getScale());
-
+            if (activeCamera && entity->getModel()) {
+            totalEntities++;
+            AABB bounds = entity->getWorldBounds(modelMatrix);
+            if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
+                culledEntities++;
+                return modelMatrix;  // Culled: skip rendering but return transform for children
+            }
+        }
             std::string shaderName = entity->getShader();
             Model* model = entity->getModel();
             if (!shaderName.empty() && model) {
