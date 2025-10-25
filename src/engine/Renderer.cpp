@@ -1929,17 +1929,13 @@ void Renderer::createInstance() {
         }
 
         if(isPressed && !wasPressed) {
-            std::cout << "Mouse clicked!" << std::endl;
             if(currentTime - lastClickTime < 0.2) {
-                std::cout << "Click too soon, ignoring" << std::endl;
                 wasPressed = isPressed;
                 return;
             }
             lastClickTime = currentTime;
 
-            std::cout << "Hovered object: " << (app->hoveredObject ? "yes" : "no") << std::endl;
             if (app->hoveredObject && app->hoveredObject->onClick) {
-                std::cout << "Calling onClick()" << std::endl;
                 app->hoveredObject->onClick();
                 app->hoveredObject = nullptr;
             }
