@@ -739,6 +739,12 @@ struct TextVertex{
         float xscale = 1.0f, yscale = 1.0f;
         glfwGetWindowContentScale(window, &xscale, &yscale);
         float deviceScale = std::max(xscale, 1.0f);
+        #ifdef __APPLE__
+        if (xscale >= 1.5f || yscale >= 1.5f) {
+            constexpr float kRetinaMultiplier = 1.25f;
+            deviceScale *= kRetinaMultiplier;
+        }
+        #endif
         uiScale = deviceScale;
         textScale = deviceScale;
         textSizeScale = 1.0f;
@@ -1958,7 +1964,9 @@ void Renderer::createInstance() {
         glm::vec2 canvasSize = designResolution * layoutScale;
         glm::vec2 canvasOrigin = 0.5f * (swapExtentF - canvasSize);
 
-        glm::vec2 mousePosF(static_cast<float>(xpos), static_cast<float>(ypos));
+        float xscale = 1.0f, yscale = 1.0f;
+        glfwGetWindowContentScale(window, &xscale, &yscale);
+        glm::vec2 mousePosF(static_cast<float>(xpos) * std::max(xscale, 1.0f), static_cast<float>(ypos) * std::max(yscale, 1.0f));
         mousePosF.y = swapExtentF.y - mousePosF.y;
 
         bool foundHover = false;
@@ -1971,11 +1979,13 @@ void Renderer::createInstance() {
 
             LayoutRect designRect = resolveDesignRect(node, parentDesignRect);
             LayoutRect pixelRect = toPixelRect(designRect, canvasOrigin, layoutScale);
+            const float invLayout = layoutScale > 0.0f ? (1.0f / layoutScale) : 0.0f;
+            glm::vec2 mouseDesign = (mousePosF - canvasOrigin) * invLayout;
 
             if (auto* buttonNode = dynamic_cast<ButtonObject*>(node)) {
                 bool isHovered =
-                    mousePosF.x >= pixelRect.pos.x && mousePosF.x <= (pixelRect.pos.x + pixelRect.size.x) &&
-                    mousePosF.y >= pixelRect.pos.y && mousePosF.y <= (pixelRect.pos.y + pixelRect.size.y);
+                    mouseDesign.x >= designRect.pos.x && mouseDesign.x <= (designRect.pos.x + designRect.size.x) &&
+                    mouseDesign.y >= designRect.pos.y && mouseDesign.y <= (designRect.pos.y + designRect.size.y);
                 if (isHovered) {
                     app->hoveredObject = buttonNode;
                     foundHover = true;

@@ -40,5 +40,6 @@
 *.dwo
 
 build
+bin
 
 src/assets/shaders/compiled

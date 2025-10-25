@@ -14,65 +14,65 @@ public:
         const glm::vec3& rotation = {0.0f, 0.0f, 0.0f}
     ) : Entity(name, shader, position, rotation) {}
     void update(float deltaTime) override {
-        // FIX: Clamp delta time to prevent physics explosions during frame stalls (e.g., window resize)
-        // Without this, a 2-second frame stall causes velocity.y -= 9.81 * 2.0 = -19.62, teleporting player through floor
-        const float MAX_DELTA_TIME = 0.05f;  // 50ms max = 20 FPS minimum
+        // Clamp deltaTime to avoid giant steps (e.g., when resizing window)
+        const float MAX_DELTA_TIME = 0.05f; // 50 ms
         deltaTime = std::min(deltaTime, MAX_DELTA_TIME);
-        bool changedPos = false;
-        bool appliedCorrection = false;
-        float previousVerticalVelocity = velocity.y;
+
+        glm::vec3 desiredVel(0.0f);
         if (glm::length(pressed) > 0.001f) {
             glm::mat4 yawRotation = glm::rotate(glm::mat4(1.0f), glm::radians(getRotation().y), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::vec3 worldDirection = glm::vec3(yawRotation * glm::vec4(pressed, 0.0f));
-            worldDirection.y = 0.0f;
-            const float magnitude = glm::length(worldDirection);
-            if (magnitude > 0.001f) {
-                worldDirection = worldDirection / magnitude;
-                glm::vec3 tempVelocity = worldDirection * moveSpeed;
-                glm::vec3 newPosition = getPosition() + tempVelocity * deltaTime;
-                collision moveCollision = willCollide(tempVelocity * deltaTime);
-                if (!moveCollision.box) {
-                    changedPos = true;
-                    velocity.x = tempVelocity.x;
-                    velocity.z = tempVelocity.z;
-                } else {
-                    if (glm::length(moveCollision.mtv) > 0.0f) {
-                        glm::vec3 normal = glm::normalize(moveCollision.mtv);
-                        glm::vec3 tangential = tempVelocity - glm::dot(tempVelocity, normal) * normal;
-                        velocity.x = tangential.x;
-                        velocity.z = tangential.z;
-                    } else {
-                        velocity.x = 0.0f;
-                        velocity.z = 0.0f;
-                    }
+            glm::vec3 worldDir = glm::vec3(yawRotation * glm::vec4(pressed, 0.0f));
+            worldDir.y = 0.0f;
+            float m = glm::length(worldDir);
+            if (m > 0.001f) {
+                worldDir /= m;
+                desiredVel = worldDir * moveSpeed;
+            }
+        }
+        velocity.x = desiredVel.x;
+        velocity.z = desiredVel.z;
+        velocity.y -= 9.81f * deltaTime;
+
+        // Substep integration to prevent tunneling through thin objects
+        const float MAX_STEP_DIST = 0.25f;
+        const float totalMoveLen = glm::length(velocity * deltaTime);
+        int steps = totalMoveLen > 0.0f ? static_cast<int>(std::ceil(totalMoveLen / MAX_STEP_DIST)) : 1;
+        steps = std::clamp(steps, 1, 8);
+        const float subDt = deltaTime / static_cast<float>(steps);
+
+        constexpr float kSkin = 0.002f; // small separation to avoid re-colliding due to numerical error
+        for (int i = 0; i < steps; ++i) {
+            glm::vec3 stepDelta = velocity * subDt;
+            collision pred = willCollide(stepDelta);
+            if (!pred.box) {
+                setPosition(getPosition() + stepDelta);
+            } else {
+                setPosition(getPosition() + stepDelta + pred.mtv);
+                float len = glm::length(pred.mtv);
+                if (len > 1e-5f) {
+                    glm::vec3 n = pred.mtv / len;
+                    float vn = glm::dot(velocity, n);
+                    if (vn < 0.0f) velocity -= vn * n;
+                    // Skin offset to keep a tiny separation
+                    setPosition(getPosition() + n * kSkin);
+                    // If colliding with floor, stop downward velocity
+                    if (n.y > 0.5f && velocity.y < 0.0f) velocity.y = 0.0f;
+                }
+            }
+            collision post = willCollide(glm::vec3(0.0f));
+            if (post.box) {
+                setPosition(getPosition() + post.mtv);
+                float len = glm::length(post.mtv);
+                if (len > 1e-5f) {
+                    glm::vec3 n = post.mtv / len;
+                    float vn = glm::dot(velocity, n);
+                    if (vn < 0.0f) velocity -= vn * n;
+                    setPosition(getPosition() + n * kSkin);
+                    if (n.y > 0.5f && velocity.y < 0.0f) velocity.y = 0.0f;
                 }
             }
         }
-        velocity.y = previousVerticalVelocity;
-        velocity.y -= 9.81f * deltaTime;
-        glm::vec3 newPosition = getPosition() + velocity * deltaTime;
-        collision moveResult = willCollide(velocity * deltaTime);
-        if (!moveResult.box) {
-            setPosition(newPosition);
-            changedPos = true;
-        } else if (changedPos) {
-            velocity.y = previousVerticalVelocity;
-            newPosition = getPosition() + velocity * deltaTime;
-            setPosition(newPosition);
-        }
-        collision col = willCollide(glm::vec3(0.0f));
-        if (col.box != nullptr) {
-            glm::vec3 mtv = col.mtv;
-            setPosition(getPosition() + mtv);
-            float mtvLength = glm::length(mtv);
-            if (mtvLength > 1e-5f) {
-                glm::vec3 normal = mtv / mtvLength;
-                velocity -= glm::dot(velocity, normal) * normal;
-            }
-            changedPos = true;
-            appliedCorrection = true;
-        }
-        if ((!changedPos && !appliedCorrection) || glm::length(velocity) < 1e-4f) {
+        if (glm::length(velocity) < 1e-4f) {
             resetVelocity();
         }
     }
@@ -98,7 +98,8 @@ public:
             glm::vec3 bodyRot = getRotation();
             bodyRot.y = std::fmod(bodyRot.y + delta.y, 360.0f);
             if (bodyRot.y < 0.0f) bodyRot.y += 360.0f;
-            if (!willCollide(glm::vec3(0.0f), bodyRot - getRotation()).box) {
+            collision rotCol = willCollide(glm::vec3(0.0f), bodyRot - getRotation());
+            if (!rotCol.box || glm::length(rotCol.mtv) < 5e-3f) {
                 setRotation(bodyRot);
             }
         }

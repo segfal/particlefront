@@ -33,6 +33,9 @@ public:
                     case GLFW_KEY_D:
                         move({1.0f, 0.0f, 0.0f});
                         break;
+                    case GLFW_KEY_SPACE:
+                        jump();
+                        break;
                     default:
                         break;
                 }
@@ -50,9 +53,6 @@ public:
                         break;
                     case GLFW_KEY_D:
                         stopMove({1.0f, 0.0f, 0.0f});
-                        break;
-                    case GLFW_KEY_SPACE:
-                        jump();
                         break;
                     default:
                         break;
