@@ -19,6 +19,8 @@ public:
     const uint32_t getIndexCount() const { return static_cast<uint32_t>(indices.size()); }
     const glm::vec3& getBoundsMin() const { return boundsMin; }
     const glm::vec3& getBoundsMax() const { return boundsMax; }
+    const std::vector<float>& getVertices() const { return vertices; }
+    const std::vector<uint32_t>& getIndices() const { return indices; }
 private:
     Renderer* renderer = nullptr;
     std::string name;

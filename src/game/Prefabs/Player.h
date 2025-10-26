@@ -2,7 +2,7 @@
 #include "../../engine/CharacterEntity.h"
 #include "../../engine/InputManager.h"
 #include "../../engine/Camera.h"
-#include "../../engine/CollisionBox.h"
+#include "../../engine/Collider.h"
 #include "../../engine/Renderer.h"
 
 class Player : public CharacterEntity {
@@ -11,7 +11,7 @@ public:
         : CharacterEntity("player", "pbr", position, rotation) {
             playerCamera = new Camera({0.0f, 1.6f, 0.0f}, {0.0f, rotation.y, 0.0f}, 70.0f);
             this->addChild(playerCamera);
-            CollisionBox* box = new CollisionBox({0.0f, 0.6f, 0.0f}, {0.0f, 0.0f, 0.0f}, this->getName(), {0.5f, 1.8f, 0.5f});
+            OBBCollider* box = new OBBCollider({0.0f, 0.6f, 0.0f}, {0.0f, 0.0f, 0.0f}, this->getName(), {0.5f, 1.8f, 0.5f});
             this->addChild(box);
             Renderer::getInstance()->setActiveCamera(playerCamera);
             InputManager::getInstance()->registerListener([this](const std::vector<InputEvent>& events) { this->registerInput(events); });

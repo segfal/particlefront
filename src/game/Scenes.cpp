@@ -14,7 +14,7 @@
 #include "Prefabs/Player.h"
 #include "../engine/Camera.h"
 #include "../engine/Renderer.h"
-#include "../engine/CollisionBox.h"
+#include "../engine/Collider.h"
 #include "Scenes.h"
 
 #define PI 3.14159265358979323846
@@ -32,25 +32,31 @@ void MainMenu() {
 
 void Scene1() {
     Renderer::getInstance()->setUIMode(false);
+    ModelManager* modelMgr = ModelManager::getInstance();
     EntityManager* entityMgr = EntityManager::getInstance();
     Entity* exampleEntity = new Entity("exampleCube", "pbr", {0.0f, 1.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
-    exampleEntity->setModel(ModelManager::getInstance()->getModel("cube"));
-    CollisionBox* box1 = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity->getName(), {1.0f, 1.0f, 1.0f});
+    exampleEntity->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box1 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity->getName(), {1.0f, 1.0f, 1.0f});
     exampleEntity->addChild(box1);
     entityMgr->addEntity("exampleCube", exampleEntity);
     Entity* exampleEntity2 = new Entity("exampleCube2", "pbr", {0.0f, 1.5f, -10.0f}, {0.0f, 45.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
-    exampleEntity2->setModel(ModelManager::getInstance()->getModel("cube"));
-    CollisionBox* box2 = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity2->getName(), {1.0f, 1.0f, 1.0f});
+    exampleEntity2->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box2 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity2->getName(), {1.0f, 1.0f, 1.0f});
     exampleEntity2->addChild(box2);
     entityMgr->addEntity("exampleCube2", exampleEntity2);
 
-    Entity* floor = new Entity("floor", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {20.0f, 1.0f, 20.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
-    floor->setModel(ModelManager::getInstance()->getModel("cube"));
-    CollisionBox* floorBox = new CollisionBox({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, floor->getName(), {1.0f, 1.0f, 1.0f});
+    Entity* floor = new Entity("floor", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_ground_albedo", "materials_ground_metallic", "materials_ground_roughness", "materials_ground_normal"});
+    floor->setModel(ModelManager::getInstance()->getModel("ground"));
+    ConvexCollider* floorBox = new ConvexCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, floor->getName());
+    floorBox->setVerticesInterleaved(modelMgr->getModel("ground-collider")->getVertices(), 8, 0, modelMgr->getModel("ground-collider")->getIndices(), {0.0f, 0.0f, 0.0f});
     floor->addChild(floorBox);
     entityMgr->addEntity("floor", floor);
 
-    Player* player = new Player({0.0f, 5.0f, -5.0f}, {0.0f, 0.0f, 0.0f});
+    Entity* walls = new Entity("walls", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.2f, 1.2f, 1.2f}, {"materials_walls_albedo", "materials_walls_metallic", "materials_walls_roughness", "materials_walls_normal"});
+    walls->setModel(ModelManager::getInstance()->getModel("walls"));
+    entityMgr->addEntity("walls", walls);
+
+    Player* player = new Player({0.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 
     entityMgr->addEntity("player", player);
 }

@@ -1382,13 +1382,13 @@ void Renderer::createInstance() {
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::scale(modelMatrix, entity->getScale());
             if (activeCamera && entity->getModel()) {
-            totalEntities++;
-            AABB bounds = entity->getWorldBounds(modelMatrix);
-            if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
-                culledEntities++;
-                return modelMatrix;  // Culled: skip rendering but return transform for children
+                totalEntities++;
+                AABB bounds = entity->getWorldBounds(modelMatrix);
+                if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
+                    culledEntities++;
+                    return modelMatrix;  // Culled: skip rendering but return transform for children
+                }
             }
-        }
             std::string shaderName = entity->getShader();
             Model* model = entity->getModel();
             if (!shaderName.empty() && model) {
@@ -1399,7 +1399,7 @@ void Renderer::createInstance() {
                     UniformBufferObject ubo{};
                     ubo.model = modelMatrix;
                     ubo.view = view;
-                    ubo.proj = glm::perspective(glm::radians(cameraFOV), static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f), 0.1f, 100.0f);
+                    ubo.proj = glm::perspective(glm::radians(cameraFOV), static_cast<float>(swapChainExtent.width) / std::max(static_cast<float>(swapChainExtent.height), 1.0f), 0.1f, 500.0f);
                     ubo.proj[1][1] *= -1;
                     ubo.cameraPos = cameraPos;
                     entity->updateUniformBuffer(currentFrame, ubo);

@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include "Entity.h"
-#include "CollisionBox.h"
+#include "Collider.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 class CharacterEntity : public Entity {
@@ -44,7 +44,7 @@ public:
         for (int i = 0; i < steps; ++i) {
             glm::vec3 stepDelta = velocity * subDt;
             collision pred = willCollide(stepDelta);
-            if (!pred.box) {
+            if (!pred.other) {
                 setPosition(getPosition() + stepDelta);
             } else {
                 setPosition(getPosition() + stepDelta + pred.mtv);
@@ -60,7 +60,7 @@ public:
                 }
             }
             collision post = willCollide(glm::vec3(0.0f));
-            if (post.box) {
+            if (post.other) {
                 setPosition(getPosition() + post.mtv);
                 float len = glm::length(post.mtv);
                 if (len > 1e-5f) {
@@ -99,7 +99,7 @@ public:
             bodyRot.y = std::fmod(bodyRot.y + delta.y, 360.0f);
             if (bodyRot.y < 0.0f) bodyRot.y += 360.0f;
             collision rotCol = willCollide(glm::vec3(0.0f), bodyRot - getRotation());
-            if (!rotCol.box || glm::length(rotCol.mtv) < 5e-3f) {
+            if (!rotCol.other || glm::length(rotCol.mtv) < 5e-3f) {
                 setRotation(bodyRot);
             }
         }
@@ -122,32 +122,54 @@ private:
     const float moveSpeed = 10.0f;
 
     struct collision {
-        CollisionBox* box = nullptr;
+        Collider* other = nullptr;
         glm::vec3 mtv = glm::vec3(0.0f);
     };
 
+    static bool aabbIntersects(const ColliderAABB& a, const ColliderAABB& b, float margin = 0.0f) {
+        if (a.min.x > b.max.x + margin || a.max.x < b.min.x - margin) return false;
+        if (a.min.y > b.max.y + margin || a.max.y < b.min.y - margin) return false;
+        if (a.min.z > b.max.z + margin || a.max.z < b.min.z - margin) return false;
+        return true;
+    }
+
     collision willCollide(const glm::vec3& deltaPos, const glm::vec3& deltaRot = glm::vec3(0.0f)) {
-        CollisionBox* myBox = nullptr;
+        OBBCollider* myBox = nullptr;
         for (auto& child : this->getChildren()) {
-            myBox = dynamic_cast<CollisionBox*>(child);
+            myBox = dynamic_cast<OBBCollider*>(child);
             if (myBox) break;
         }
         if (!myBox) {
             return {nullptr, glm::vec3(0.0f)};
         }
-        glm::vec3 collision = glm::vec3(0.0f);
+        ColliderAABB myAABB = myBox->getWorldAABB();
+        if (deltaPos.x != 0.0f || deltaPos.y != 0.0f || deltaPos.z != 0.0f) {
+            myAABB.min += deltaPos;
+            myAABB.max += deltaPos;
+        }
+
+        CollisionMTV mtv{};
+        constexpr float kMTV_MIN_LEN = 1e-3f;
+        constexpr float kPENETRATION_MIN = 1e-4f;
         EntityManager* entityMgr = EntityManager::getInstance();
         for (const auto& [otherName, otherEntity] : entityMgr->getAllEntities()) {
             if (otherEntity == this) continue;
-            CollisionBox* otherBox = nullptr;
+            Collider* otherCollider = nullptr;
             for (auto& child : otherEntity->getChildren()) {
-                otherBox = dynamic_cast<CollisionBox*>(child);
-                if (otherBox) break;
+                otherCollider = dynamic_cast<Collider*>(child);
+                if (otherCollider) break;
             }
-            if (!otherBox) continue;
-            collision = myBox->intersects(otherBox, deltaPos, deltaRot);
-            if (glm::length(collision) > 0.0f) {
-                return {otherBox, collision};
+            if (!otherCollider) continue;
+            ColliderAABB otherAABB = otherCollider->getWorldAABB();
+            
+            bool aabbOverlaps = aabbIntersects(myAABB, otherAABB, 0.005f);
+            if (!aabbOverlaps) continue;
+            
+            mtv = CollisionMTV{};
+            if (myBox->intersectsMTV(*otherCollider, mtv, deltaPos, deltaRot)) {
+                if (mtv.penetration > kPENETRATION_MIN && glm::length(mtv.mtv) > kMTV_MIN_LEN) {
+                    return {otherCollider, mtv.mtv};
+                }
             }
         }
         return {nullptr, glm::vec3(0.0f)};
