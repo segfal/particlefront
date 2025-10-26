@@ -99,8 +99,19 @@ public:
             bodyRot.y = std::fmod(bodyRot.y + delta.y, 360.0f);
             if (bodyRot.y < 0.0f) bodyRot.y += 360.0f;
             collision rotCol = willCollide(glm::vec3(0.0f), bodyRot - getRotation());
-            if (!rotCol.other || glm::length(rotCol.mtv) < 5e-3f) {
+            const float kYawPenetrationEps = 2.0e-2f;
+            if (!rotCol.other) {
                 setRotation(bodyRot);
+            } else {
+                float pen = glm::length(rotCol.mtv);
+                if (pen < kYawPenetrationEps) {
+                    setRotation(bodyRot);
+                } else {
+                    glm::vec3 n = rotCol.mtv / pen;
+                    if (std::abs(n.y) > 0.6f) {
+                        setRotation(bodyRot);
+                    }
+                }
             }
         }
 
@@ -161,8 +172,8 @@ private:
             }
             if (!otherCollider) continue;
             ColliderAABB otherAABB = otherCollider->getWorldAABB();
-            
-            bool aabbOverlaps = aabbIntersects(myAABB, otherAABB, 0.005f);
+            float broadphaseMargin = (glm::length(deltaRot) > 0.0f) ? 0.0f : 0.005f;
+            bool aabbOverlaps = aabbIntersects(myAABB, otherAABB, broadphaseMargin);
             if (!aabbOverlaps) continue;
             
             mtv = CollisionMTV{};
