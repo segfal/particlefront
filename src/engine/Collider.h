@@ -69,9 +69,9 @@ inline void projectOntoAxis(const std::array<glm::vec3, 8>& corners, const glm::
     }
 }
 
-inline ColliderAABB aabbFromCorners(const std::array<glm::vec3,8>& corners) {
+inline ColliderAABB aabbFromCorners(const std::array<glm::vec3, 8>& corners) {
     ColliderAABB box{corners[0], corners[0]};
-    for (int i=1;i<8;++i) {
+    for (int i = 1; i < 8; ++i) {
         box.min = glm::min(box.min, corners[i]);
         box.max = glm::max(box.max, corners[i]);
     }
@@ -120,8 +120,6 @@ inline glm::vec3 normalizeOrZero(const glm::vec3& v) {
     return l > 1e-6f ? (v / l) : glm::vec3(0.0f);
 }
 
-static bool g_debugSAT = false;
-
 inline void addAxisUnique(std::vector<glm::vec3>& axes, const glm::vec3& axis) {
     glm::vec3 n = normalizeOrZero(axis);
     if (glm::length(n) < 1e-6f) return;
@@ -132,12 +130,24 @@ inline void addAxisUnique(std::vector<glm::vec3>& axes, const glm::vec3& axis) {
 }
 
 inline void projectVertsOntoAxis(const std::vector<glm::vec3>& verts, const glm::vec3& axis, float& mn, float& mx, const glm::vec3& offset = glm::vec3(0.0f)) {
+    if (verts.empty()) { mn = mx = 0.0f; return; }
+#if defined(USE_OPENMP)
+    mn = std::numeric_limits<float>::infinity();
+    mx = -std::numeric_limits<float>::infinity();
+    #pragma omp simd reduction(min:mn) reduction(max:mx)
+    for (size_t i = 0; i < verts.size(); ++i) {
+        float p = glm::dot(verts[i] + offset, axis);
+        mn = std::min(mn, p);
+        mx = std::max(mx, p);
+    }
+#else
     mn = mx = glm::dot(verts[0] + offset, axis);
-    for (size_t i=1;i<verts.size();++i) {
+    for (size_t i=1; i<verts.size(); ++i) {
         float p = glm::dot(verts[i] + offset, axis);
         if (p < mn) mn = p;
         if (p > mx) mx = p;
     }
+#endif
 }
 
 inline bool satMTV(const std::vector<glm::vec3>& vertsA, const std::vector<glm::vec3>& faceAxesA, const std::vector<glm::vec3>& edgeDirsA, const std::vector<glm::vec3>& vertsB, const std::vector<glm::vec3>& faceAxesB, const std::vector<glm::vec3>& edgeDirsB, const glm::vec3& centerDelta, CollisionMTV& out, const glm::vec3& offsetA = glm::vec3(0.0f), const glm::vec3& offsetB = glm::vec3(0.0f)) {
@@ -158,6 +168,40 @@ inline bool satMTV(const std::vector<glm::vec3>& vertsA, const std::vector<glm::
 
     float minOverlap = std::numeric_limits<float>::max();
     glm::vec3 bestAxis(0.0f);
+
+#if defined(USE_OPENMP)
+    const int m = static_cast<int>(axes.size());
+    if (m == 0) return false;
+    std::vector<float> overlaps(static_cast<size_t>(m));
+    #pragma omp parallel for
+    for (int i = 0; i < m; ++i) {
+        float aMin, aMax, bMin, bMax;
+        const glm::vec3& axis = axes[static_cast<size_t>(i)];
+        projectVertsOntoAxis(vertsA, axis, aMin, aMax, offsetA);
+        projectVertsOntoAxis(vertsB, axis, bMin, bMax, offsetB);
+        overlaps[static_cast<size_t>(i)] = std::min(aMax, bMax) - std::max(aMin, bMin);
+    }
+    for (int i = 0; i < m; ++i) {
+        if (overlaps[static_cast<size_t>(i)] <= kEps) return false;
+    }
+    int bestIdx = -1;
+    #pragma omp parallel
+    {
+        float localMin = std::numeric_limits<float>::max();
+        int localIdx = -1;
+        #pragma omp for nowait
+        for (int i = 0; i < m; ++i) {
+            float ov = overlaps[static_cast<size_t>(i)];
+            if (ov < localMin) { localMin = ov; localIdx = i; }
+        }
+        #pragma omp critical
+        {
+            if (localMin < minOverlap) { minOverlap = localMin; bestIdx = localIdx; }
+        }
+    }
+    if (minOverlap <= kEps || bestIdx < 0) return false;
+    bestAxis = axes[static_cast<size_t>(bestIdx)];
+#else
     int axisIdx = 0;
     for (const auto& axis : axes) {
         float aMin, aMax, bMin, bMax;
@@ -174,6 +218,7 @@ inline bool satMTV(const std::vector<glm::vec3>& vertsA, const std::vector<glm::
         axisIdx++;
     }
     if (minOverlap <= kEps) return false;
+#endif
     if (glm::dot(bestAxis, centerDelta) < 0.0f) bestAxis = -bestAxis;
     out.normal = bestAxis; out.penetration = minOverlap; out.mtv = bestAxis * minOverlap; 
     return true;
@@ -181,9 +226,12 @@ inline bool satMTV(const std::vector<glm::vec3>& vertsA, const std::vector<glm::
 
 inline void buildConvexData(const std::vector<glm::vec3>& localVerts, const std::vector<glm::ivec3>& tris, const glm::mat4& worldTr, std::vector<glm::vec3>& outVerts, std::vector<glm::vec3>& outFaceAxes, std::vector<glm::vec3>& outEdgeDirs, glm::vec3& outCenter) {
     outVerts.clear(); outFaceAxes.clear(); outEdgeDirs.clear(); outCenter = glm::vec3(0.0f);
-    outVerts.reserve(localVerts.size());
-    for (auto& v : localVerts) {
-        outVerts.emplace_back(glm::vec3(worldTr * glm::vec4(v,1.0f)));
+    outVerts.resize(localVerts.size());
+#if defined(USE_OPENMP)
+    #pragma omp parallel for
+#endif
+    for (int i = 0; i < static_cast<int>(localVerts.size()); ++i) {
+        outVerts[i] = (glm::vec3(worldTr * glm::vec4(localVerts[i], 1.0f)));
     }
     if (outVerts.empty()) return;
     for (auto& t : tris) {
@@ -208,10 +256,15 @@ inline void buildConvexData(const std::vector<glm::vec3>& localVerts, const std:
         outFaceAxes = { glm::vec3(1,0,0), glm::vec3(0,1,0), glm::vec3(0,0,1) };
     }
     if (outEdgeDirs.empty()) outEdgeDirs = outFaceAxes;
-    for (auto& v : outVerts) {
-        outCenter += v;
+    float centerX = 0.0f, centerY = 0.0f, centerZ = 0.0f;
+#if defined(USE_OPENMP)
+    #pragma omp parallel for reduction(+:centerX, centerY, centerZ)
+#endif
+    for (size_t i = 0; i < outVerts.size(); ++i) {
+        const auto& v = outVerts[i];
+        centerX += v.x; centerY += v.y; centerZ += v.z;
     }
-    outCenter /= static_cast<float>(outVerts.size());
+    outCenter = glm::vec3(centerX, centerY, centerZ) / static_cast<float>(outVerts.size());
 }
 
 class OBBCollider : public Collider {
@@ -259,12 +312,30 @@ public:
             glm::vec3 p = glm::vec3(computeWorldTransform(const_cast<ConvexCollider*>(this))[3]);
             return {p - glm::vec3(0.001f), p + glm::vec3(0.001f)};
         }
-        ColliderAABB box = {glm::vec3(std::numeric_limits<float>::max()), glm::vec3(-std::numeric_limits<float>::max())};
-        for (const auto& w : worldVerts) {
-            box.min = glm::min(box.min, w);
-            box.max = glm::max(box.max, w);
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float minZ = std::numeric_limits<float>::max();
+        float maxX = -std::numeric_limits<float>::max();
+        float maxY = -std::numeric_limits<float>::max();
+        float maxZ = -std::numeric_limits<float>::max();
+#if defined(USE_OPENMP)
+        #pragma omp parallel for reduction(min:minX, minY, minZ) reduction(max:maxX, maxY, maxZ)
+        for (int i = 0; i < static_cast<int>(worldVerts.size()); ++i) {
+            const glm::vec3& w = worldVerts[static_cast<size_t>(i)];
+            if (w.x < minX) minX = w.x; if (w.y < minY) minY = w.y; if (w.z < minZ) minZ = w.z;
+            if (w.x > maxX) maxX = w.x; if (w.y > maxY) maxY = w.y; if (w.z > maxZ) maxZ = w.z;
         }
-        return box;
+#else
+        for (const auto& w : worldVerts) {
+            minX = glm::min(minX, w.x);
+            maxX = glm::max(maxX, w.x);
+            minY = glm::min(minY, w.y);
+            maxY = glm::max(maxY, w.y);
+            minZ = glm::min(minZ, w.z);
+            maxZ = glm::max(maxZ, w.z);
+        }
+#endif
+        return ColliderAABB{ glm::vec3(minX, minY, minZ), glm::vec3(maxX, maxY, maxZ) };
     }
     bool intersectsMTV(const Collider& other, CollisionMTV& out, const glm::vec3& deltaPos, const glm::vec3& deltaRot) const override {
         (void)deltaRot;
@@ -312,31 +383,37 @@ public:
     void setVertices(const std::vector<float>& positions, const std::vector<uint32_t>& indices, const glm::vec3& rotationDegrees = glm::vec3(0.0f)) {
         localVertices.clear();
         const size_t vcount = positions.size() / 3;
-        localVertices.reserve(vcount);
+        localVertices.resize(vcount);
         glm::mat4 rotMat(1.0f);
         if (glm::length(rotationDegrees) > 0.001f) {
             rotMat = glm::rotate(rotMat, glm::radians(rotationDegrees.x), glm::vec3(1.0f, 0.0f, 0.0f));
             rotMat = glm::rotate(rotMat, glm::radians(rotationDegrees.y), glm::vec3(0.0f, 1.0f, 0.0f));
             rotMat = glm::rotate(rotMat, glm::radians(rotationDegrees.z), glm::vec3(0.0f, 0.0f, 1.0f));
         }
-        
+
+    #if defined(USE_OPENMP)
+        #pragma omp parallel for
+    #endif
         for (size_t i = 0; i < vcount; ++i) {
             glm::vec3 v(positions[i*3 + 0], positions[i*3 + 1], positions[i*3 + 2]);
             if (glm::length(rotationDegrees) > 0.001f) {
                 v = glm::vec3(rotMat * glm::vec4(v, 1.0f));
             }
-            localVertices.emplace_back(v);
+            localVertices[i] = v;
         }
 
         triangles.clear();
         const size_t tcount = indices.size() / 3;
-        triangles.reserve(tcount);
+        triangles.resize(tcount);
+#if defined(USE_OPENMP)
+        #pragma omp parallel for
+#endif
         for (size_t t = 0; t < tcount; ++t) {
             uint32_t i0 = indices[t*3 + 0];
             uint32_t i1 = indices[t*3 + 1];
             uint32_t i2 = indices[t*3 + 2];
             if (i0 < vcount && i1 < vcount && i2 < vcount) {
-                triangles.emplace_back(static_cast<int>(i0), static_cast<int>(i1), static_cast<int>(i2));
+                triangles[t] = glm::ivec3(static_cast<int>(i0), static_cast<int>(i1), static_cast<int>(i2));
             }
         }
         cacheValid = false;
@@ -407,9 +484,12 @@ private:
         }
         if (!same) {
             worldVerts.clear(); faceAxesCached.clear(); edgeDirsCached.clear(); worldCenter = glm::vec3(0.0f);
-            worldVerts.reserve(localVertices.size());
-            for (const auto& v : localVertices) {
-                worldVerts.emplace_back(glm::vec3(tr * glm::vec4(v,1.0f)));
+            worldVerts.resize(localVertices.size());
+#if defined(USE_OPENMP)
+            #pragma omp parallel for
+#endif
+            for (int i = 0; i < static_cast<int>(localVertices.size()); ++i) {
+                worldVerts[i] = glm::vec3(tr * glm::vec4(localVertices[i], 1.0f));
             }
             
             if (!worldVerts.empty()) {
@@ -435,10 +515,19 @@ private:
                     faceAxesCached = { glm::vec3(1,0,0), glm::vec3(0,1,0), glm::vec3(0,0,1) };
                 }
                 if (edgeDirsCached.empty()) edgeDirsCached = faceAxesCached;
-                for (const auto& v : worldVerts) worldCenter += v;
-                worldCenter /= static_cast<float>(worldVerts.size());
+                
+                float centerX = 0.0f, centerY = 0.0f, centerZ = 0.0f;
+#if defined(USE_OPENMP)
+                #pragma omp parallel for reduction(+:centerX, centerY, centerZ)
+#endif
+                for (int i = 0; i < static_cast<int>(worldVerts.size()); ++i) {
+                    const auto& v = worldVerts[static_cast<size_t>(i)];
+                    centerX += v.x; centerY += v.y; centerZ += v.z;
+                }
+                worldCenter = glm::vec3(centerX, centerY, centerZ) / static_cast<float>(worldVerts.size());
             }
-            lastWorldTr = tr; cacheValid = true;
+            lastWorldTr = tr;
+            cacheValid = true;
         }
     }
 };

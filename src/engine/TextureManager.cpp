@@ -35,13 +35,17 @@ void TextureManager::findAllTextures(std::string path, std::string prevName) {
 }
 void TextureManager::prepareTextureAtlas() {
     std::vector<std::pair<std::string, ImageData>> loadedImages;
+#if defined(USE_OPENMP)
     #pragma omp parallel for
+#endif
     for (int i = 0; i < static_cast<int>(textureAtlas.size()); ++i) {
         auto it = std::next(textureAtlas.begin(), i);
         stbi_set_flip_vertically_on_load(true);
         int texWidth, texHeight, texChannels;
         stbi_uc* pixels = stbi_load(it->second.path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+#if defined(USE_OPENMP)
         #pragma omp critical
+#endif
         {
             loadedImages.push_back({it->first, {pixels, texWidth, texHeight}});
         }

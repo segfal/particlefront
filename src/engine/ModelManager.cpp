@@ -1,4 +1,3 @@
-#pragma once
 #include "ModelManager.h"
 #include "Model.h"
 #include <filesystem>
