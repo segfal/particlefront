@@ -132,14 +132,16 @@ inline void addAxisUnique(std::vector<glm::vec3>& axes, const glm::vec3& axis) {
 inline void projectVertsOntoAxis(const std::vector<glm::vec3>& verts, const glm::vec3& axis, float& mn, float& mx, const glm::vec3& offset = glm::vec3(0.0f)) {
     if (verts.empty()) { mn = mx = 0.0f; return; }
 #if defined(USE_OPENMP)
-    mn = std::numeric_limits<float>::infinity();
-    mx = -std::numeric_limits<float>::infinity();
-    #pragma omp simd reduction(min:mn) reduction(max:mx)
-    for (size_t i = 0; i < verts.size(); ++i) {
-        float p = glm::dot(verts[i] + offset, axis);
-        mn = std::min(mn, p);
-        mx = std::max(mx, p);
+    float mnLocal = std::numeric_limits<float>::infinity();
+    float mxLocal = -std::numeric_limits<float>::infinity();
+    #pragma omp parallel for reduction(min:mnLocal) reduction(max:mxLocal)
+    for (int i = 0; i < static_cast<int>(verts.size()); ++i) {
+        float p = glm::dot(verts[static_cast<size_t>(i)] + offset, axis);
+        if (p < mnLocal) mnLocal = p;
+        if (p > mxLocal) mxLocal = p;
     }
+    mn = mnLocal;
+    mx = mxLocal;
 #else
     mn = mx = glm::dot(verts[0] + offset, axis);
     for (size_t i=1; i<verts.size(); ++i) {
@@ -260,7 +262,7 @@ inline void buildConvexData(const std::vector<glm::vec3>& localVerts, const std:
 #if defined(USE_OPENMP)
     #pragma omp parallel for reduction(+:centerX, centerY, centerZ)
 #endif
-    for (size_t i = 0; i < outVerts.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(outVerts.size()); ++i) {
         const auto& v = outVerts[i];
         centerX += v.x; centerY += v.y; centerZ += v.z;
     }
@@ -391,10 +393,10 @@ public:
             rotMat = glm::rotate(rotMat, glm::radians(rotationDegrees.z), glm::vec3(0.0f, 0.0f, 1.0f));
         }
 
-    #if defined(USE_OPENMP)
+#if defined(USE_OPENMP)
         #pragma omp parallel for
-    #endif
-        for (size_t i = 0; i < vcount; ++i) {
+#endif
+        for (int i = 0; i < static_cast<int>(vcount); ++i) {
             glm::vec3 v(positions[i*3 + 0], positions[i*3 + 1], positions[i*3 + 2]);
             if (glm::length(rotationDegrees) > 0.001f) {
                 v = glm::vec3(rotMat * glm::vec4(v, 1.0f));
@@ -408,7 +410,7 @@ public:
 #if defined(USE_OPENMP)
         #pragma omp parallel for
 #endif
-        for (size_t t = 0; t < tcount; ++t) {
+        for (int t = 0; t < static_cast<int>(tcount); ++t) {
             uint32_t i0 = indices[t*3 + 0];
             uint32_t i1 = indices[t*3 + 1];
             uint32_t i2 = indices[t*3 + 2];

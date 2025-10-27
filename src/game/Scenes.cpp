@@ -15,6 +15,7 @@
 #include "../engine/Camera.h"
 #include "../engine/Renderer.h"
 #include "../engine/Collider.h"
+#include "../utils.h"
 #include "Scenes.h"
 
 #define PI 3.14159265358979323846
@@ -34,16 +35,32 @@ void Scene1() {
     Renderer::getInstance()->setUIMode(false);
     ModelManager* modelMgr = ModelManager::getInstance();
     EntityManager* entityMgr = EntityManager::getInstance();
-    Entity* exampleEntity = new Entity("exampleCube", "pbr", {0.0f, 1.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
-    exampleEntity->setModel(modelMgr->getModel("cube"));
-    OBBCollider* box1 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity->getName(), {1.0f, 1.0f, 1.0f});
-    exampleEntity->addChild(box1);
-    entityMgr->addEntity("exampleCube", exampleEntity);
-    Entity* exampleEntity2 = new Entity("exampleCube2", "pbr", {0.0f, 1.5f, -10.0f}, {0.0f, 45.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_metal_albedo", "materials_metal_metallic", "materials_metal_roughness", "materials_metal_normal"});
-    exampleEntity2->setModel(modelMgr->getModel("cube"));
-    OBBCollider* box2 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, exampleEntity2->getName(), {1.0f, 1.0f, 1.0f});
-    exampleEntity2->addChild(box2);
-    entityMgr->addEntity("exampleCube2", exampleEntity2);
+    Entity* cube1 = new Entity("exampleCube", "pbr", blenderPosToEngine({16.226f, -9.377f, 0.338f}), blenderRotToEngine({-0.915f, -4.86f, 36.1f}), {1.0f, 1.0f, 1.0f}, {"materials_crate_albedo", "materials_crate_metallic", "materials_crate_roughness", "materials_crate_normal"});
+    cube1->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box1 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, cube1->getName(), {1.0f, 1.0f, 1.0f});
+    cube1->addChild(box1);
+    entityMgr->addEntity("exampleCube", cube1);
+    Entity* cube2 = new Entity("exampleCube2", "pbr", blenderPosToEngine({-3.428f, 9.697f, 0.038f}), blenderRotToEngine({0.805f, -5.75f, 20.8f}), {1.0f, 1.0f, 1.0f}, {"materials_crate_albedo", "materials_crate_metallic", "materials_crate_roughness", "materials_crate_normal"});
+    cube2->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box2 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, cube2->getName(), {1.0f, 1.0f, 1.0f});
+    cube2->addChild(box2);
+    entityMgr->addEntity("exampleCube2", cube2);
+    Entity* cube3 = new Entity("exampleCube3", "pbr", blenderPosToEngine({-13.327f, -10.937f, 0.063f}), blenderRotToEngine({47.1f, -83.4f, 60.2f}), {1.0f, 1.0f, 1.0f}, {"materials_crate_albedo", "materials_crate_metallic", "materials_crate_roughness", "materials_crate_normal"});
+    cube3->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box3 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, cube3->getName(), {1.0f, 1.0f, 1.0f});
+    cube3->addChild(box3);
+    entityMgr->addEntity("exampleCube3", cube3);
+    Entity* cube4 = new Entity("exampleCube4", "pbr", blenderPosToEngine({-5.744f, 1.052f, 0.364f}), blenderRotToEngine({96.4f, -1.02f, 83.8f}), {1.0f, 1.0f, 1.0f}, {"materials_crate_albedo", "materials_crate_metallic", "materials_crate_roughness", "materials_crate_normal"});
+    cube4->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box4 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, cube4->getName(), {1.0f, 1.0f, 1.0f});
+    cube4->addChild(box4);
+    entityMgr->addEntity("exampleCube4", cube4);
+    Entity* cube5 = new Entity("exampleCube5", "pbr", blenderPosToEngine({-5.676f, -1.421f, 0.405f}), blenderRotToEngine({-92.9f, -5.97f, -1.38f}), {1.0f, 1.0f, 1.0f}, {"materials_crate_albedo", "materials_crate_metallic", "materials_crate_roughness", "materials_crate_normal"});
+    cube5->setModel(modelMgr->getModel("cube"));
+    OBBCollider* box5 = new OBBCollider({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, cube5->getName(), {1.0f, 1.0f, 1.0f});
+    cube5->addChild(box5);
+    entityMgr->addEntity("exampleCube5", cube5);
+    
 
     Entity* floor = new Entity("floor", "pbr", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {"materials_ground_albedo", "materials_ground_metallic", "materials_ground_roughness", "materials_ground_normal"});
     floor->setModel(ModelManager::getInstance()->getModel("ground"));
@@ -56,7 +73,7 @@ void Scene1() {
     walls->setModel(ModelManager::getInstance()->getModel("walls"));
     entityMgr->addEntity("walls", walls);
 
-    Player* player = new Player({0.0f, 10.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
+    Player* player = new Player({16.0f, 10.0f, -9.0f}, {0.0f, 0.0f, 0.0f});
 
     entityMgr->addEntity("player", player);
 }

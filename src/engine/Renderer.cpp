@@ -747,7 +747,7 @@ struct TextVertex{
         #endif
         uiScale = deviceScale;
         textScale = deviceScale;
-        textSizeScale = 1.0f;
+        textSizeScale = deviceScale * 1.5f;
     }
     void Renderer::cleanup() {
         if (uiManager) {

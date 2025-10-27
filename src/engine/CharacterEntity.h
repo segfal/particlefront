@@ -40,23 +40,68 @@ public:
         steps = std::clamp(steps, 1, 8);
         const float subDt = deltaTime / static_cast<float>(steps);
 
+        bool touchedGroundThisFrame = false;
+        glm::vec3 groundNormalAccum(0.0f);
         constexpr float kSkin = 0.002f; // small separation to avoid re-colliding due to numerical error
         for (int i = 0; i < steps; ++i) {
-            glm::vec3 stepDelta = velocity * subDt;
-            collision pred = willCollide(stepDelta);
-            if (!pred.other) {
-                setPosition(getPosition() + stepDelta);
-            } else {
-                setPosition(getPosition() + stepDelta + pred.mtv);
-                float len = glm::length(pred.mtv);
-                if (len > 1e-5f) {
-                    glm::vec3 n = pred.mtv / len;
-                    float vn = glm::dot(velocity, n);
-                    if (vn < 0.0f) velocity -= vn * n;
-                    // Skin offset to keep a tiny separation
-                    setPosition(getPosition() + n * kSkin);
-                    // If colliding with floor, stop downward velocity
-                    if (n.y > 0.5f && velocity.y < 0.0f) velocity.y = 0.0f;
+            glm::vec3 vStep(0.0f, velocity.y * subDt, 0.0f);
+            if (vStep.y != 0.0f) {
+                collision vcol = willCollide(vStep);
+                if (!vcol.other) {
+                    setPosition(getPosition() + vStep);
+                } else {
+                    setPosition(getPosition() + vStep + vcol.mtv);
+                    float len = glm::length(vcol.mtv);
+                    if (len > 1e-5f) {
+                        glm::vec3 n = vcol.mtv / len;
+                        float vn = glm::dot(velocity, n);
+                        if (vn < 0.0f) velocity -= vn * n;
+                        setPosition(getPosition() + n * kSkin);
+                        if (n.y > groundedNormalThreshold && velocity.y <= 0.0f) {
+                            velocity.y = 0.0f;
+                            touchedGroundThisFrame = true;
+                            groundNormalAccum += n;
+                        }
+                    }
+                }
+            }
+            if (vStep.y == 0.0f) {
+                const float kGroundProbe = 0.02f;
+                collision gcol = willCollide(glm::vec3(0.0f, -kGroundProbe, 0.0f));
+                if (gcol.other) {
+                    float glen = glm::length(gcol.mtv);
+                    if (glen > 1e-5f) {
+                        glm::vec3 gn = gcol.mtv / glen;
+                        if (gn.y > groundedNormalThreshold) {
+                            touchedGroundThisFrame = true;
+                            groundNormalAccum += gn;
+                            if (velocity.y < 0.0f) velocity.y = 0.0f;
+                        }
+                    }
+                }
+            }
+            glm::vec3 hStep(velocity.x * subDt, 0.0f, velocity.z * subDt);
+            if (hStep.x != 0.0f || hStep.z != 0.0f) {
+                if (touchedGroundThisFrame) {
+                    glm::vec3 gN = glm::length(groundNormalAccum) > 0.0f ? glm::normalize(groundNormalAccum) : glm::vec3(0.0f, 1.0f, 0.0f);
+                    hStep = hStep - glm::dot(hStep, gN) * gN;
+                }
+                collision hcol = willCollide(hStep);
+                if (!hcol.other) {
+                    setPosition(getPosition() + hStep);
+                } else {
+                    glm::vec3 mtv = hcol.mtv;
+                    if (!touchedGroundThisFrame && mtv.y > 0.0f) {
+                        mtv.y = 0.0f;
+                    }
+                    setPosition(getPosition() + hStep + mtv);
+                    float len = glm::length(hcol.mtv);
+                    if (len > 1e-5f) {
+                        glm::vec3 n = hcol.mtv / len;
+                        float vn = glm::dot(velocity, n);
+                        if (vn < 0.0f) velocity -= vn * n;
+                        setPosition(getPosition() + n * kSkin);
+                    }
                 }
             }
             collision post = willCollide(glm::vec3(0.0f));
@@ -64,13 +109,24 @@ public:
                 setPosition(getPosition() + post.mtv);
                 float len = glm::length(post.mtv);
                 if (len > 1e-5f) {
-                    glm::vec3 n = post.mtv / len;
+                    glm::vec3 fix = post.mtv;
+                    if (!touchedGroundThisFrame && fix.y > 0.0f) {
+                        fix.y = 0.0f;
+                        setPosition(getPosition() - post.mtv + fix);
+                    }
+                    glm::vec3 n = (len > 0.0f) ? (post.mtv / len) : glm::vec3(0.0f,1.0f,0.0f);
                     float vn = glm::dot(velocity, n);
                     if (vn < 0.0f) velocity -= vn * n;
                     setPosition(getPosition() + n * kSkin);
-                    if (n.y > 0.5f && velocity.y < 0.0f) velocity.y = 0.0f;
                 }
             }
+        }
+        if (touchedGroundThisFrame) {
+            grounded = true;
+            groundedTimer = 0.0f;
+        } else {
+            grounded = groundedTimer <= coyoteTime;
+            groundedTimer += deltaTime;
         }
         if (glm::length(velocity) < 1e-4f) {
             resetVelocity();
@@ -86,8 +142,9 @@ public:
         }
     }
     void jump() {
-        if (std::abs(velocity.y) < 0.01f) {
-            velocity.y = 10.0f;
+        if (grounded || groundedTimer <= coyoteTime) {
+            velocity.y = jumpSpeed;
+            grounded = false;
         }
     }
     void resetVelocity() {
@@ -131,6 +188,11 @@ private:
     glm::vec3 velocity = glm::vec3(0.0f);
     glm::vec3 pressed = glm::vec3(0.0f);
     const float moveSpeed = 10.0f;
+    const float jumpSpeed = 10.0f;
+    const float groundedNormalThreshold = 0.5f;
+    const float coyoteTime = 0.10f;
+    bool grounded = false;
+    float groundedTimer = 1.0f;
 
     struct collision {
         Collider* other = nullptr;

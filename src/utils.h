@@ -8,6 +8,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/euler_angles.hpp>
 #include "engine/Entity.h"
 #include "engine/EntityManager.h"
 #include "engine/UIObject.h"
@@ -128,4 +130,28 @@ inline glm::vec3 rotatePointAroundPivot(const glm::vec3& point, const glm::vec3&
     rotMat = glm::rotate(rotMat, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::vec4 rotatedPoint = rotMat * glm::vec4(translatedPoint, 1.0f);
     return glm::vec3(rotatedPoint) + pivot;
+}
+
+inline glm::mat3 blenderToEngineBasis() {
+    return glm::mat3(
+        1.0f,  0.0f,  0.0f,
+        0.0f,  0.0f,  1.0f,
+        0.0f, -1.0f,  0.0f
+    );
+}
+
+inline glm::vec3 blenderPosToEngine(const glm::vec3& pBlender) {
+    return glm::vec3(pBlender.x, pBlender.z, -pBlender.y);
+}
+
+inline glm::vec3 blenderRotToEngine(const glm::vec3& eulerDegBlender) {
+    const glm::vec3 rB = glm::radians(eulerDegBlender);
+    glm::mat4 Rb4 = glm::eulerAngleXYZ(rB.x, rB.y, rB.z);
+    glm::mat3 Rb(Rb4);
+    const glm::mat3 A = blenderToEngineBasis();
+    const glm::mat3 Ag = glm::transpose(A);
+    glm::mat3 Rg = A * Rb * Ag;
+    float rx, ry, rz;
+    glm::extractEulerAngleXYZ(glm::mat4(Rg), rx, ry, rz);
+    return glm::degrees(glm::vec3(rx, ry, rz));
 }
