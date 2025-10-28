@@ -755,7 +755,11 @@ struct TextVertex{
         #endif
         uiScale = deviceScale;
         textScale = deviceScale;
-        textSizeScale = deviceScale * 1.5f;
+        #ifdef __APPLE__
+        textSizeScale = 1.0f;
+        #else
+        textSizeScale = 2.2f;
+        #endif
     }
     void Renderer::cleanup() {
         if (uiManager) {
