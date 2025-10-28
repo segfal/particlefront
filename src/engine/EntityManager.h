@@ -16,6 +16,13 @@ public:
         entities[name] = entity;
     }
 
+    Entity* getEntity(const std::string& name) {
+        if (entities.find(name) != entities.end()) {
+            return entities[name];
+        }
+        return nullptr;
+    }
+
     void removeEntity(const std::string& name) {
         if (entities.find(name) == entities.end()) return;
         delete entities[name];

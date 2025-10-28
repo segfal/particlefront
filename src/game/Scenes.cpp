@@ -15,10 +15,13 @@
 #include "../engine/Camera.h"
 #include "../engine/Renderer.h"
 #include "../engine/Collider.h"
+#include "../engine/Skybox.h"
 #include "../utils.h"
 #include "Scenes.h"
 
 #define PI 3.14159265358979323846
+
+Skybox* skybox;
 
 void MainMenu() {
     Renderer::getInstance()->setUIMode(true);
@@ -29,6 +32,7 @@ void MainMenu() {
     ButtonObject* startButton = new ButtonObject({0.0f, -60.0f}, {200.0f, 50.0f}, {1, 1}, "startButton", "window", "Start Game", StartGame);
     container->addChild(startButton);
     uiMgr->addUIObject(container);
+    skybox = new Skybox();
 }
 
 void Scene1() {
@@ -74,6 +78,8 @@ void Scene1() {
     entityMgr->addEntity("walls", walls);
 
     Player* player = new Player({16.0f, 10.0f, -9.0f}, {0.0f, 0.0f, 0.0f});
+    
+    entityMgr->addEntity("skybox", skybox);
 
     entityMgr->addEntity("player", player);
 }

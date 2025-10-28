@@ -234,7 +234,7 @@ struct TextVertex{
         }
         return shaderModule;
     }
-    void Renderer::createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange, bool enableDepth, bool useTextVertex) {
+    void Renderer::createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange, bool enableDepth, bool useTextVertex, VkCullModeFlags cullMode, VkFrontFace frontFace, bool depthWrite, VkCompareOp depthCompare) {
         std::vector<char> vertShaderCode = readFile(vertexShaderPath);
         std::vector<char> fragShaderCode = readFile(fragmentShaderPath);
         VkShaderModule vertexShader = createShaderModule(vertShaderCode);
@@ -307,8 +307,8 @@ struct TextVertex{
             .depthClampEnable = VK_FALSE,
             .rasterizerDiscardEnable = VK_FALSE,
             .polygonMode = VK_POLYGON_MODE_FILL,
-            .cullMode = VK_CULL_MODE_BACK_BIT,
-            .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .cullMode = cullMode,
+            .frontFace = frontFace,
             .depthBiasEnable = VK_FALSE,
             .depthBiasConstantFactor = 0.0f,
             .depthBiasClamp = 0.0f,
@@ -353,8 +353,8 @@ struct TextVertex{
         VkPipelineDepthStencilStateCreateInfo depthStencil = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
             .depthTestEnable = enableDepth ? VK_TRUE : VK_FALSE,
-            .depthWriteEnable = enableDepth ? VK_TRUE : VK_FALSE,
-            .depthCompareOp = VK_COMPARE_OP_LESS,
+            .depthWriteEnable = (enableDepth && depthWrite) ? VK_TRUE : VK_FALSE,
+            .depthCompareOp = depthCompare,
             .depthBoundsTestEnable = VK_FALSE,
             .stencilTestEnable = VK_FALSE,
             .front = {},
@@ -569,7 +569,7 @@ struct TextVertex{
     void Renderer::createTextureImageView(VkFormat textureFormat, VkImage textureImage, VkImageView &textureImageView) {
         textureImageView = createImageView(textureImage, textureFormat, 1);
     }
-    VkImageView Renderer::createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags){
+    VkImageView Renderer::createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags, VkImageViewType viewType, uint32_t layerCount){
         VkImageAspectFlags resolvedAspect = aspectFlags;
         if (format == VK_FORMAT_D16_UNORM ||
             format == VK_FORMAT_X8_D24_UNORM_PACK32 ||
@@ -585,14 +585,14 @@ struct TextVertex{
         VkImageViewCreateInfo viewInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .viewType = viewType,
             .format = format,
             .subresourceRange = {
                 .aspectMask = resolvedAspect,
                 .baseMipLevel = 0,
                 .levelCount = mipLevels,
                 .baseArrayLayer = 0,
-                .layerCount = 1,
+                .layerCount = layerCount,
             },
         };
         VkImageView imageView;
@@ -623,29 +623,37 @@ struct TextVertex{
         }
         vkBindBufferMemory(device, buffer, bufferMemory, 0);
     }
-    void Renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
+    void Renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t layerCount, VkDeviceSize layerSize) {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-        VkBufferImageCopy region = {
-            .bufferOffset = 0,
-            .bufferRowLength = 0,
-            .bufferImageHeight = 0,
-            .imageSubresource = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-            .imageOffset = {0, 0, 0},
-            .imageExtent = {
-                .width = width,
-                .height = height,
-                .depth = 1,
-            },
-        };
-        vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        if (layerCount == 0) {
+            layerCount = 1;
+        }
+        const VkDeviceSize inferredLayerSize = layerSize != 0 ? layerSize : static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4;
+        std::vector<VkBufferImageCopy> regions(layerCount);
+        for (uint32_t layer = 0; layer < layerCount; ++layer) {
+            VkBufferImageCopy region = {
+                .bufferOffset = inferredLayerSize * layer,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = 0,
+                    .baseArrayLayer = layer,
+                    .layerCount = 1,
+                },
+                .imageOffset = {0, 0, 0},
+                .imageExtent = {
+                    .width = width,
+                    .height = height,
+                    .depth = 1,
+                },
+            };
+            regions[layer] = region;
+        }
+        vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(regions.size()), regions.data());
         endSingleTimeCommands(commandBuffer);
     }
-    void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
+    void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels, uint32_t layerCount) {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands();
         VkImageMemoryBarrier barrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -659,7 +667,7 @@ struct TextVertex{
                 .baseMipLevel = 0,
                 .levelCount = mipLevels,
                 .baseArrayLayer = 0,
-                .layerCount = 1,
+                .layerCount = layerCount,
             },
         };
         VkPipelineStageFlags sourceStage;
@@ -693,10 +701,10 @@ struct TextVertex{
         vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
         endSingleTimeCommands(commandBuffer);
     }
-    void Renderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    void Renderer::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory, uint32_t arrayLayers, VkImageCreateFlags flags) {
         VkImageCreateInfo imageInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .flags = 0,
+            .flags = flags,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = format,
             .extent = {
@@ -705,7 +713,7 @@ struct TextVertex{
                 .depth = 1
             },
             .mipLevels = mipLevels,
-            .arrayLayers = 1,
+            .arrayLayers = arrayLayers,
             .samples = numSamples,
             .tiling = tiling,
             .usage = usage,
@@ -1359,7 +1367,6 @@ void Renderer::createInstance() {
             }
             return transform;
         };
-        int totalEntities = 0;
         int culledEntities = 0;
         Frustum frustrum;
         if (activeCamera) {
@@ -1381,8 +1388,7 @@ void Renderer::createInstance() {
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
             modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
             modelMatrix = glm::scale(modelMatrix, entity->getScale());
-            if (activeCamera && entity->getModel()) {
-                totalEntities++;
+            if (activeCamera && entity->getModel() && entity->getName() != "skybox") {
                 AABB bounds = entity->getWorldBounds(modelMatrix);
                 if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
                     culledEntities++;
@@ -1430,8 +1436,17 @@ void Renderer::createInstance() {
                 self(self, child, currentModel);
             }
         };
+        Entity* skyboxEntity = nullptr;
+        auto itSky = entities.find("skybox");
+        if (itSky != entities.end() && itSky->second && itSky->second->getParent() == nullptr) {
+            skyboxEntity = itSky->second;
+            renderEntity(skyboxEntity, glm::mat4(1.0f));
+        }
         for (auto& [name, entity] : entities) {
             if (entity->getParent() == nullptr) {
+                if (entity == skyboxEntity) {
+                    continue;
+                }
                 traverse(traverse, entity, glm::mat4(1.0f));
             }
         }

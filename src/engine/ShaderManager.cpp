@@ -51,9 +51,15 @@ void ShaderManager::loadShader(const std::string& name, const std::string& verte
 
     renderer->createDescriptorSetLayout(shader.vertexBitBindings, shader.fragmentBitBindings, shader.descriptorSetLayout);
     VkPushConstantRange* pPCR = (shader.pushConstantRange.size > 0) ? &shader.pushConstantRange : nullptr;
-    const bool enableDepth = (name != "ui");
-    const bool useTextVertex = (name == "ui");
-    renderer->createGraphicsPipeline(shader.vertexPath, shader.fragmentPath, shader.pipeline, shader.pipelineLayout, shader.descriptorSetLayout, pPCR, enableDepth, useTextVertex);
+    const bool isUI = (name == "ui");
+    const bool isSkybox = (name == "skybox");
+    const bool enableDepth = !isUI;
+    const bool useTextVertex = isUI;
+    const VkCullModeFlags cullMode = isSkybox ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
+    const bool depthWrite = isSkybox ? false : enableDepth;
+    const VkCompareOp depthCompare = isSkybox ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS;
+    const VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    renderer->createGraphicsPipeline(shader.vertexPath, shader.fragmentPath, shader.pipeline, shader.pipelineLayout, shader.descriptorSetLayout, pPCR, enableDepth, useTextVertex, cullMode, frontFace, depthWrite, depthCompare);
     renderer->createDescriptorPool(shader.vertexBitBindings, shader.fragmentBitBindings, shader.descriptorPool, shader.poolMultiplier);
     shaders[name] = shader;
 }
@@ -83,6 +89,19 @@ ShaderManager* ShaderManager::getInstance() {
             },
             .poolMultiplier = 256,
             .vertexBitBindings = 0,
+            .fragmentBitBindings = 1,
+        },
+        new Shader{
+            .name = "skybox",
+            .vertexPath = "src/assets/shaders/compiled/skybox.vert.spv",
+            .fragmentPath = "src/assets/shaders/compiled/skybox.frag.spv",
+            .pushConstantRange = {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                .offset = 0,
+                .size = sizeof(UniformBufferObject),
+            },
+            .poolMultiplier = 64,
+            .vertexBitBindings = 1,
             .fragmentBitBindings = 1,
         },
     };

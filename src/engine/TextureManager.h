@@ -23,6 +23,7 @@ public:
     void prepareTextureAtlas();
 
     Image* getTexture(const std::string& name);
+    void registerTexture(const std::string& name, const Image& texture);
     void shutdown();
     static TextureManager* getInstance();
 };

@@ -25,7 +25,7 @@ void TextureManager::findAllTextures(std::string path, std::string prevName) {
 
     for (const auto& entry : fs::directory_iterator(searchPath)) {
         std::string name = entry.path().stem().string();
-        if (entry.path().extension() == ".png") {
+        if (entry.path().extension() == ".png" || entry.path().extension() == ".hdr") {
             textureAtlas[prevName + name] = Image{};
             textureAtlas[prevName + name].path = entry.path().string();
         } else if (entry.is_directory()) {
@@ -82,6 +82,30 @@ Image* TextureManager::getTexture(const std::string& name) {
         return &it->second;
     }
     return nullptr;
+}
+void TextureManager::registerTexture(const std::string& name, const Image& texture) {
+    if (!renderer) {
+        renderer = Renderer::getInstance();
+    }
+    VkDevice deviceHandle = renderer ? renderer->device : VK_NULL_HANDLE;
+    auto it = textureAtlas.find(name);
+    if (it != textureAtlas.end()) {
+        if (deviceHandle != VK_NULL_HANDLE) {
+            if (it->second.imageSampler) {
+                vkDestroySampler(deviceHandle, it->second.imageSampler, nullptr);
+            }
+            if (it->second.imageView) {
+                vkDestroyImageView(deviceHandle, it->second.imageView, nullptr);
+            }
+            if (it->second.image) {
+                vkDestroyImage(deviceHandle, it->second.image, nullptr);
+            }
+            if (it->second.imageMemory) {
+                vkFreeMemory(deviceHandle, it->second.imageMemory, nullptr);
+            }
+        }
+    }
+    textureAtlas[name] = texture;
 }
 void TextureManager::shutdown() {
     if (!renderer || renderer->device == VK_NULL_HANDLE) {
