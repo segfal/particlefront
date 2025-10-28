@@ -1,45 +1,12 @@
-#pragma once
-#include "Entity.h"
-#include "EntityManager.h"
-#include "TextureManager.h"
-#include "ShaderManager.h"
-#include "Renderer.h"
-#include "ModelManager.h"
-#include <stb/stb_image.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
-#include <algorithm>
-#include <cmath>
-#include <vector>
-#include <cstring>
-#include <iostream>
+#include <Skybox.h>
 
-#ifdef max
-#undef max
-#endif
-#ifdef min
-#undef min
-#endif
-
-class Skybox : public Entity {
-public:
-    Skybox() : Entity("skybox", "skybox", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, glm::vec3(200.0f), ensureCubemapTexture()) {
-        this->setModel(ModelManager::getInstance()->getModel("cube"));
+void Skybox::update(float deltaTime) {
+    if (camera) {
+        setPosition(camera->getPosition());
     }
+}
 
-    void update(float deltaTime) override {
-        if (camera) {
-            setPosition(camera->getPosition());
-        }
-    }
-
-private:
-    static std::vector<std::string> ensureCubemapTexture();
-    static bool createCubemapTexture();
-    Entity* camera = EntityManager::getInstance()->getEntity("camera");
-};
-
-inline std::vector<std::string> Skybox::ensureCubemapTexture() {
+std::vector<std::string> Skybox::ensureCubemapTexture() {
     static bool attempted = false;
     static std::vector<std::string> textures = {"skybox_cubemap"};
     if (!attempted) {
@@ -52,7 +19,7 @@ inline std::vector<std::string> Skybox::ensureCubemapTexture() {
     return textures;
 }
 
-inline bool Skybox::createCubemapTexture() {
+bool Skybox::createCubemapTexture() {
     TextureManager* textureManager = TextureManager::getInstance();
     Renderer* renderer = Renderer::getInstance();
     if (!textureManager || !renderer || renderer->device == VK_NULL_HANDLE) {

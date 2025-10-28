@@ -5,8 +5,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
-#include "Image.h"
-#include "UIManager.h"
+#include <Image.h>
+#include <UIManager.h>
 
 class Renderer;
 

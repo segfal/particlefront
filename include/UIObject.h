@@ -5,7 +5,7 @@
 #include <string>
 #include <map>
 #include <vector>
-#include "Image.h"
+#include <Image.h>
 
 class Renderer;
 struct Shader;

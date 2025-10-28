@@ -1,9 +1,9 @@
 #pragma once
-#include "../../engine/CharacterEntity.h"
-#include "../../engine/InputManager.h"
-#include "../../engine/Camera.h"
-#include "../../engine/Collider.h"
-#include "../../engine/Renderer.h"
+#include <CharacterEntity.h>
+#include <InputManager.h>
+#include <Camera.h>
+#include <Collider.h>
+#include <Renderer.h>
 
 class Player : public CharacterEntity {
 public:

@@ -10,9 +10,9 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/euler_angles.hpp>
-#include "engine/Entity.h"
-#include "engine/EntityManager.h"
-#include "engine/UIObject.h"
+#include <Entity.h>
+#include <EntityManager.h>
+#include <UIObject.h>
 
 inline std::filesystem::path resolvePath(const std::string& relative) {
     namespace fs = std::filesystem;

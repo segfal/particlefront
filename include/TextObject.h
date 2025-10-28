@@ -1,5 +1,5 @@
 #pragma once
-#include "UIObject.h"
+#include <UIObject.h>
 
 class TextObject : public UIObject {
 public:

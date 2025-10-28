@@ -3,20 +3,20 @@
 #include <iostream>
 #include <cmath>
 #include <glm/glm.hpp>
-#include "../engine/UIManager.h"
-#include "../engine/TextObject.h"
-#include "../engine/ButtonObject.h"
+#include <UIManager.h>
+#include <TextObject.h>
+#include <ButtonObject.h>
 #include "MainMenu/MainMenuFunctions.h"
-#include "../engine/UIObject.h"
-#include "../engine/EntityManager.h"
-#include "../engine/Entity.h"
-#include "../engine/ModelManager.h"
+#include <UIObject.h>
+#include <EntityManager.h>
+#include <Entity.h>
+#include <ModelManager.h>
 #include "Prefabs/Player.h"
-#include "../engine/Camera.h"
-#include "../engine/Renderer.h"
-#include "../engine/Collider.h"
-#include "../engine/Skybox.h"
-#include "../utils.h"
+#include <Camera.h>
+#include <Renderer.h>
+#include <Collider.h>
+#include <Skybox.h>
+#include <utils.h>
 #include "Scenes.h"
 
 #define PI 3.14159265358979323846

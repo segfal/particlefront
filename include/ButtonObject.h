@@ -1,6 +1,6 @@
 #pragma once
-#include "UIObject.h"
-#include "TextObject.h"
+#include <UIObject.h>
+#include <TextObject.h>
 #include <functional>
 
 class ButtonObject : public UIObject {

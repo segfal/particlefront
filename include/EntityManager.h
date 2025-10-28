@@ -1,7 +1,7 @@
 #pragma once
 #include <map>
 #include <string>
-#include "Entity.h"
+#include <Entity.h>
 
 class EntityManager {
 public:

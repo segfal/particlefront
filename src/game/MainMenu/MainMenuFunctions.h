@@ -1,6 +1,6 @@
 #pragma once
 #include <iostream>
-#include "../../engine/SceneManager.h"
+#include <SceneManager.h>
 
 void StartGame() {
     // Logic to start the game

@@ -1,4 +1,4 @@
-#include "engine/Renderer.h"
+#include <Renderer.h>
 
 int main() {
     Renderer::getInstance()->run();

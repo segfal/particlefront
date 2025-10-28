@@ -1,6 +1,6 @@
 #pragma once
-#include "Entity.h"
-#include "Frustrum.h"
+#include <Entity.h>
+#include <Frustrum.h>
 class Camera : public Entity {
 public:
     Camera(glm::vec3 position, glm::vec3 rotation, float fov) : Entity("camera", "", position, rotation), fov(fov) {}
