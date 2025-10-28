@@ -1,8 +1,8 @@
-#include "TextureManager.h"
-#include "Renderer.h"
+#include <TextureManager.h>
+#include <Renderer.h>
 #include <filesystem>
 #include <stb/stb_image.h>
-#include "../utils.h"
+#include <utils.h>
 
 TextureManager::TextureManager() {
     renderer = Renderer::getInstance();

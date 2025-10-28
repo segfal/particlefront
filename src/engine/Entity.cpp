@@ -1,5 +1,5 @@
-#include "Entity.h"
-#include "Model.h"
+#include <Entity.h>
+#include <Model.h>
 
 AABB Entity::getWorldBounds(const glm::mat4& worldTransform) const {
     Model* model = getModel();

@@ -8,9 +8,6 @@ struct AABB {
     glm::vec3 max;
 };
 
-
-
-
 class Frustum {
     public:
         enum PlaneID {

@@ -27,22 +27,22 @@
 #include <fstream>
 #include <variant>
 #include <queue>
-#include "Renderer.h"
-#include "UIManager.h"
-#include "ShaderManager.h"
-#include "FontManager.h"
-#include "SceneManager.h"
-#include "TextureManager.h"
-#include "EntityManager.h"
-#include "ModelManager.h"
-#include "Model.h"
-#include "UIObject.h"
-#include "TextObject.h"
-#include "InputManager.h"
-#include "ButtonObject.h"
-#include "Camera.h"
-#include "Frustrum.h"
-#include "../utils.h"
+#include <Renderer.h>
+#include <UIManager.h>
+#include <ShaderManager.h>
+#include <FontManager.h>
+#include <SceneManager.h>
+#include <TextureManager.h>
+#include <EntityManager.h>
+#include <ModelManager.h>
+#include <Model.h>
+#include <UIObject.h>
+#include <TextObject.h>
+#include <InputManager.h>
+#include <ButtonObject.h>
+#include <Camera.h>
+#include <Frustrum.h>
+#include <utils.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;

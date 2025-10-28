@@ -1,6 +1,6 @@
-#include "FontManager.h"
-#include "Renderer.h"
-#include "ShaderManager.h"
+#include <FontManager.h>
+#include <Renderer.h>
+#include <ShaderManager.h>
 #include <freetype/include/ft2build.h>
 #include FT_FREETYPE_H
 #include <iostream>
@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <utility>
 #include <filesystem>
-#include "../utils.h"
+#include <utils.h>
 
 FontManager::FontManager() {
     renderer = Renderer::getInstance();

@@ -1,5 +1,5 @@
-#include "UIManager.h"
-#include "UIObject.h"
+#include <UIManager.h>
+#include <UIObject.h>
 
 UIManager::~UIManager() {
     for (auto& entry : uiObjects) {

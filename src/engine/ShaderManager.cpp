@@ -1,5 +1,5 @@
-#include "ShaderManager.h"
-#include "Renderer.h"
+#include <ShaderManager.h>
+#include <Renderer.h>
 
 ShaderManager::ShaderManager(std::vector<Shader*>& shaders) {
     renderer = Renderer::getInstance();

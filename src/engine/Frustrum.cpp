@@ -1,5 +1,4 @@
-#include "Frustrum.h"
-
+#include <Frustrum.h>
 
 void Frustum::extractFromMatrix(const glm::mat4& viewProjectionMatrix) {
     planes[LEFT].normal = glm::vec3(

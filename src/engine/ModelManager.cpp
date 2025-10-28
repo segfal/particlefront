@@ -1,7 +1,7 @@
-#include "ModelManager.h"
-#include "Model.h"
+#include <ModelManager.h>
+#include <Model.h>
 #include <filesystem>
-#include "../utils.h"
+#include <utils.h>
 
 ModelManager::ModelManager() {
     loadModels("src/assets/models/");
