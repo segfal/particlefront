@@ -101,24 +101,6 @@ inline LayoutRect toPixelRect(const LayoutRect& designRect, const glm::vec2& can
     return pixelRect;
 }
 
-inline glm::mat4 computeWorldTransform(Entity* node) {
-    glm::mat4 transform(1.0f);
-    std::vector<Entity*> hierarchy;
-    for (Entity* current = node; current != nullptr; current = current->getParent()) {
-        hierarchy.push_back(current);
-    }
-    for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
-        Entity* current = *it;
-        transform = glm::translate(transform, current->getPosition());
-        glm::vec3 rot = current->getRotation();
-        transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
-        transform = glm::scale(transform, current->getScale());
-    }
-    return transform;
-}
-
 inline glm::vec3 rotatePointAroundPivot(const glm::vec3& point, const glm::vec3& pivot, const glm::vec3& rotation) {
     if (glm::length(rotation) < 0.001f) {
         return point;

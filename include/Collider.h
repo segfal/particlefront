@@ -65,7 +65,7 @@ public:
     ColliderType getColliderType() const override { return ColliderType::OBB; }
 
     ColliderAABB getWorldAABB() const override {
-        glm::mat4 tr = computeWorldTransform(const_cast<OBBCollider*>(this));
+        glm::mat4 tr = const_cast<OBBCollider*>(this)->getWorldTransform();
         auto corners = buildOBBCorners(tr, halfSize);
         return aabbFromCorners(corners);
     }
@@ -82,7 +82,7 @@ public:
         : Collider("collision_" + parentName, "", position, rotation, {1.0f,1.0f,1.0f}), half(halfSize) {}
     ColliderType getColliderType() const override { return ColliderType::AABB; }
     ColliderAABB getWorldAABB() const override {
-        glm::mat4 tr = computeWorldTransform(const_cast<AABBCollider*>(this));
+        glm::mat4 tr = const_cast<AABBCollider*>(this)->getWorldTransform();
         auto corners = buildOBBCorners(tr, half);
         return aabbFromCorners(corners);
     }

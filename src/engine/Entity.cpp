@@ -65,6 +65,50 @@ Entity* Entity::getChild(const std::string& name) {
     return nullptr;
 }
 
+glm::vec3 Entity::getWorldPosition() { return worldPosition; }
+
+glm::vec3 Entity::getWorldRotation() { return worldRotation; }
+
+glm::vec3 Entity::getWorldScale() { return worldScale; }
+
+glm::mat4 Entity::getWorldTransform() { return worldTransform; }
+
+void Entity::updateWorldTransform() {
+    glm::mat4 transform(1.0f);
+    std::vector<Entity*> hierarchy;
+    for (Entity* current = this; current != nullptr; current = current->getParent()) {
+        hierarchy.push_back(current);
+    }
+
+    for (int i = static_cast<int>(hierarchy.size()) - 1; i >= 0; --i) {
+        Entity* current = hierarchy[i];
+        transform = glm::translate(transform, current->getPosition());
+        glm::vec3 rot = current->getRotation();
+        transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        transform = glm::scale(transform, current->getScale());
+    }
+    
+    worldTransform = transform;
+
+    worldPosition = glm::vec3(transform[3]);
+    
+    glm::vec3 scaleX = glm::vec3(transform[0]);
+    glm::vec3 scaleY = glm::vec3(transform[1]);
+    glm::vec3 scaleZ = glm::vec3(transform[2]);
+    worldScale = glm::vec3(glm::length(scaleX), glm::length(scaleY), glm::length(scaleZ));
+    
+    glm::mat3 rotationMatrix;
+    rotationMatrix[0] = scaleX / worldScale.x;
+    rotationMatrix[1] = scaleY / worldScale.y;
+    rotationMatrix[2] = scaleZ / worldScale.z;
+    
+    worldRotation.x = glm::degrees(std::atan2(rotationMatrix[1][2], rotationMatrix[2][2]));
+    worldRotation.y = glm::degrees(std::atan2(-rotationMatrix[0][2], std::sqrt(rotationMatrix[1][2] * rotationMatrix[1][2] + rotationMatrix[2][2] * rotationMatrix[2][2])));
+    worldRotation.z = glm::degrees(std::atan2(rotationMatrix[0][1], rotationMatrix[0][0]));
+}
+
 void Entity::loadTextures() {
     if (shader == "") {
         return;

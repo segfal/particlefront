@@ -18,6 +18,7 @@ class Entity {
 public:
     Entity(std::string name, std::string shader, glm::vec3 position, glm::vec3 rotation, glm::vec3 scale = glm::vec3(1.0f), std::vector<std::string> textures = {}) : name(std::move(name)), shader(std::move(shader)), position(position), rotation(rotation), scale(scale), textures(std::move(textures)) {
         loadTextures();
+        updateWorldTransform();
     }
     ~Entity() {
         destroyUniformBuffers();
@@ -48,6 +49,13 @@ public:
     Entity* getChild(const std::string& name);
     Entity* getParent() const { return parent; }
 
+    glm::vec3 getWorldPosition();
+    glm::vec3 getWorldRotation();
+    glm::vec3 getWorldScale();
+    glm::mat4 getWorldTransform();
+
+    void updateWorldTransform();
+
     void loadTextures();
     const std::vector<VkDescriptorSet>& getDescriptorSets() const { return descriptorSets; }
     void updateUniformBuffer(uint32_t frameIndex, const UniformBufferObject& ubo);
@@ -65,6 +73,10 @@ private:
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 rotation = glm::vec3(0.0f);
     glm::vec3 scale = glm::vec3(1.0f);
+    glm::vec3 worldPosition = glm::vec3(0.0f);
+    glm::vec3 worldRotation = glm::vec3(0.0f);
+    glm::vec3 worldScale = glm::vec3(1.0f);
+    glm::mat4 worldTransform = glm::mat4(1.0f);
     std::vector<Entity*> children;
     Entity* parent = nullptr;
     Model* model = nullptr;

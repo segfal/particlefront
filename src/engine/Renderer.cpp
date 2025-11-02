@@ -1344,8 +1344,17 @@ void Renderer::createInstance() {
     }
     void Renderer::updateEntities() {
         auto& entities = entityManager->getAllEntities();
-        for (auto& [name, entity] : entities) {
+        auto traverse = [&](auto&& self, Entity* entity) -> void {
+            entity->updateWorldTransform();
             entity->update(deltaTime);
+            for (Entity* child : entity->getChildren()) {
+                self(self, child);
+            }
+        };
+        for (auto& [name, entity] : entities) {
+            if (entity->getParent() == nullptr) {
+                traverse(traverse, entity);
+            }
         }
     }
     void Renderer::renderEntities(VkCommandBuffer commandBuffer) {
@@ -1354,27 +1363,10 @@ void Renderer::createInstance() {
         float cameraFOV = 45.0f;
         glm::mat4 view = glm::mat4(1.0f);
 
-        auto computeWorldTransform = [](Entity* node) {
-            glm::mat4 transform(1.0f);
-            std::vector<Entity*> hierarchy;
-            for (Entity* current = node; current != nullptr; current = current->getParent()) {
-                hierarchy.push_back(current);
-            }
-            for (auto it = hierarchy.rbegin(); it != hierarchy.rend(); ++it) {
-                Entity* current = *it;
-                transform = glm::translate(transform, current->getPosition());
-                glm::vec3 rot = current->getRotation();
-                transform = glm::rotate(transform, glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                transform = glm::rotate(transform, glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                transform = glm::rotate(transform, glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f));
-                transform = glm::scale(transform, current->getScale());
-            }
-            return transform;
-        };
         int culledEntities = 0;
         Frustum frustrum;
         if (activeCamera) {
-            glm::mat4 cameraWorld = computeWorldTransform(activeCamera);
+            glm::mat4 cameraWorld = activeCamera->getWorldTransform();
             glm::vec4 worldPos = cameraWorld * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
             cameraPos = glm::vec3(worldPos);
             cameraFOV = activeCamera->getFOV();
@@ -1384,19 +1376,16 @@ void Renderer::createInstance() {
             view = glm::inverse(cameraWorld);
         }
 
-        auto renderEntity = [&](Entity* entity, const glm::mat4& parentModel) -> glm::mat4 {
-            glm::mat4 modelMatrix = parentModel;
-            modelMatrix = glm::translate(modelMatrix, entity->getPosition());
-            glm::vec3 rotation = entity->getRotation();
-            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            modelMatrix = glm::rotate(modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            modelMatrix = glm::scale(modelMatrix, entity->getScale());
+        auto renderEntity = [&](Entity* entity) -> bool {
+            if (!entity->isActive()) {
+                return false;
+            }
+            glm::mat4 modelMatrix = entity->getWorldTransform();
             if (activeCamera && entity->getModel() && entity->getName() != "skybox") {
                 AABB bounds = entity->getWorldBounds(modelMatrix);
                 if (!frustrum.intersectsAABB(bounds.min, bounds.max)) {
                     culledEntities++;
-                    return modelMatrix;  // Culled: skip rendering but return transform for children
+                    return false;  // Culled: skip rendering
                 }
             }
             std::string shaderName = entity->getShader();
@@ -1431,27 +1420,29 @@ void Renderer::createInstance() {
                     }
                 }
             }
-            return modelMatrix;
+            return true;
         };
         if (entities.empty()) return;
-        auto traverse = [&](auto&& self, Entity* entity, const glm::mat4& parentModel) -> void {
-            glm::mat4 currentModel = renderEntity(entity, parentModel);
+        auto traverse = [&](auto&& self, Entity* entity) -> void {
+            if (!renderEntity(entity)) {
+                return;
+            }
             for (Entity* child : entity->getChildren()) {
-                self(self, child, currentModel);
+                self(self, child);
             }
         };
         Entity* skyboxEntity = nullptr;
         auto itSky = entities.find("skybox");
         if (itSky != entities.end() && itSky->second && itSky->second->getParent() == nullptr) {
             skyboxEntity = itSky->second;
-            renderEntity(skyboxEntity, glm::mat4(1.0f));
+            renderEntity(skyboxEntity);
         }
         for (auto& [name, entity] : entities) {
             if (entity->getParent() == nullptr) {
                 if (entity == skyboxEntity) {
                     continue;
                 }
-                traverse(traverse, entity, glm::mat4(1.0f));
+                traverse(traverse, entity);
             }
         }
     }
@@ -1657,8 +1648,8 @@ void Renderer::createInstance() {
             .extent = swapChainExtent,
         };
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-        renderEntities(commandBuffer);
         updateEntities();
+        renderEntities(commandBuffer);
         renderUI(commandBuffer);
         vkCmdEndRenderPass(commandBuffer);
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

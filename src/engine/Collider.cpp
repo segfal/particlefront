@@ -229,7 +229,7 @@ void Collider::buildConvexData(const std::vector<glm::vec3>& localVerts, const s
 ColliderAABB ConvexCollider::getWorldAABB() const {
     ensureCacheUpdated();
     if (worldVerts.empty()) {
-        glm::vec3 p = glm::vec3(computeWorldTransform(const_cast<ConvexCollider*>(this))[3]);
+        glm::vec3 p = glm::vec3(const_cast<ConvexCollider*>(this)->getWorldTransform()[3]);
         return {p - glm::vec3(0.001f), p + glm::vec3(0.001f)};
     }
     float minX = std::numeric_limits<float>::max();
@@ -272,7 +272,7 @@ bool ConvexCollider::intersectsMTV(const Collider& other, CollisionMTV& out, con
     const std::vector<glm::vec3>& faceAxesA = faceAxesCached;
     const std::vector<glm::vec3>& edgesA = edgeDirsCached;
     glm::vec3 centerA = worldCenter + deltaPos;
-    glm::mat4 otherTr = computeWorldTransform(const_cast<Collider*>(&other));
+    glm::mat4 otherTr = const_cast<Collider*>(&other)->getWorldTransform();
     std::vector<glm::vec3> vertsB; std::vector<glm::vec3> faceAxesB; std::vector<glm::vec3> edgesB; glm::vec3 centerB(0.0f);
     if (other.getColliderType() == ColliderType::OBB) {
         auto cornersB = Collider::buildOBBCorners(otherTr, static_cast<const OBBCollider&>(other).getHalfSize());
@@ -379,7 +379,7 @@ void ConvexCollider::setVerticesInterleaved(const std::vector<float>& interleave
 }
 
 void ConvexCollider::ensureCacheUpdated() const {
-    glm::mat4 tr = computeWorldTransform(const_cast<ConvexCollider*>(this));
+    glm::mat4 tr = const_cast<ConvexCollider*>(this)->getWorldTransform();
     bool same = cacheValid;
     if (same) {
         for (int c=0;c<4 && same;++c) {
@@ -441,7 +441,7 @@ void ConvexCollider::ensureCacheUpdated() const {
 }
 
 bool OBBCollider::intersectsMTV(const Collider& other, CollisionMTV& out, const glm::vec3& deltaPos, const glm::vec3& deltaRot) const {
-    glm::mat4 baseThis = computeWorldTransform(const_cast<OBBCollider*>(this));
+    glm::mat4 baseThis = const_cast<OBBCollider*>(this)->getWorldTransform();
     glm::mat4 thisTransform = baseThis;
     thisTransform[3] += glm::vec4(deltaPos, 0.0f);
     if (glm::length(deltaRot) > 0.0f) {
@@ -461,7 +461,7 @@ bool OBBCollider::intersectsMTV(const Collider& other, CollisionMTV& out, const 
     std::vector<glm::vec3> edgesA = faceAxesA;
     glm::vec3 centerA = glm::vec3(thisTransform[3]);
 
-    glm::mat4 otherTr = computeWorldTransform(const_cast<Collider*>(&other));
+    glm::mat4 otherTr = const_cast<Collider*>(&other)->getWorldTransform();
     std::vector<glm::vec3> vertsB; std::vector<glm::vec3> faceAxesB; std::vector<glm::vec3> edgesB; glm::vec3 centerB(0.0f);
     if (other.getColliderType() == ColliderType::OBB) {
         auto cornersB = Collider::buildOBBCorners(otherTr, static_cast<const OBBCollider&>(other).getHalfSize());
@@ -498,7 +498,7 @@ bool OBBCollider::intersectsMTV(const Collider& other, CollisionMTV& out, const 
 
 bool AABBCollider::intersectsMTV(const Collider& other, CollisionMTV& out, const glm::vec3& deltaPos, const glm::vec3& deltaRot) const {
     (void)deltaRot;
-    glm::mat4 tr = computeWorldTransform(const_cast<AABBCollider*>(this));
+    glm::mat4 tr = const_cast<AABBCollider*>(this)->getWorldTransform();
     tr[3] += glm::vec4(deltaPos, 0.0f);
     if (other.getColliderType() == ColliderType::AABB) {
         ColliderAABB a = Collider::aabbFromCorners(Collider::buildOBBCorners(tr, half));
@@ -515,7 +515,7 @@ bool AABBCollider::intersectsMTV(const Collider& other, CollisionMTV& out, const
     std::vector<glm::vec3> edgesA = faceAxesA;
     glm::vec3 centerA = glm::vec3(tr[3]);
 
-    glm::mat4 otherTr = computeWorldTransform(const_cast<Collider*>(&other));
+    glm::mat4 otherTr = const_cast<Collider*>(&other)->getWorldTransform();
     std::vector<glm::vec3> vertsB; std::vector<glm::vec3> faceAxesB; std::vector<glm::vec3> edgesB; glm::vec3 centerB(0.0f);
     if (other.getColliderType() == ColliderType::OBB) {
         auto cornersB = Collider::buildOBBCorners(otherTr, static_cast<const OBBCollider&>(other).getHalfSize());
