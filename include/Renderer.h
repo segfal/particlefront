@@ -55,7 +55,7 @@ public:
     void createDescriptorSetLayout(int vertexBitBindings, int fragmentBitBindings, VkDescriptorSetLayout& descriptorSetLayout);
     void createDescriptorPool(int vertexBitBindings, int fragmentBitBindings, VkDescriptorPool &descriptorPool, int multiplier = 1);
     std::vector<VkDescriptorSet> createDescriptorSets(VkDescriptorPool pool, VkDescriptorSetLayout& descriptorSetLayout, int vertexBindingCount, int fragmentBindingCount, std::vector<Image*>& textures, std::vector<VkBuffer>& uniformBuffers);
-    void createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange = nullptr, bool enableDepth = true, bool useTextVertex = false, VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT, VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, bool depthWrite = true, VkCompareOp depthCompare = VK_COMPARE_OP_LESS);
+    void createGraphicsPipeline(const std::string& vertexShaderPath, const std::string& fragmentShaderPath, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkDescriptorSetLayout& descriptorSetLayout, VkPushConstantRange* pushConstantRange = nullptr, bool enableDepth = true, bool useTextVertex = false, VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT, VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, bool depthWrite = true, VkCompareOp depthCompare = VK_COMPARE_OP_LESS, VkRenderPass renderPassOverride = VK_NULL_HANDLE, uint32_t colorAttachmentCount = 1, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT, bool noVertexInput = false);
     void createCommandBuffers();
     void createSyncObjects();
     void setUIMode(bool enabled);
@@ -65,6 +65,9 @@ public:
     void createTextureSampler(VkSampler &sampler, uint32_t mipLevels = 1);
 
     VkDevice getDevice() const { return device; }
+    VkRenderPass getGBufferRenderPass() const { return gBufferRenderPass; }
+    VkRenderPass getLightingRenderPass() const { return lightingRenderPass; }
+    VkRenderPass getCompositeRenderPass() const { return compositeRenderPass; }
     ShaderManager* getShaderManager() const;
     uint32_t getFramesInFlight() const { return kMaxFramesInFlight; }
     bool isCursorLocked() const { return cursorLocked; }
@@ -75,7 +78,6 @@ private:
     void cleanup();
     void initVulkan();
     void mainLoop();
-    void updateUniformBuffer(uint32_t currentFrame);
     void drawFrame();
 
     void createInstance();
@@ -87,7 +89,19 @@ private:
     void recreateSwapChain();
     void cleanupSwapChain();
     void createImageViews();
-    void createRenderPass();
+    void createGBufferResources();
+    void createGBufferRenderPass();
+    void createGBufferFramebuffers();
+    void createGBufferSampler();
+    void createLightingResources();
+    void createLightingRenderPass();
+    void createLightingFramebuffers();
+    void createSSRResources();
+    void createSSRComputePipeline();
+    void createCompositeRenderPass();
+    void createCompositeFramebuffers();
+    void createDeferredDescriptorSets();
+    void recreateDeferredDescriptorSets();
     VkFormat findDepthFormat();
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
     void createCommandPool();
@@ -95,11 +109,13 @@ private:
     void setupUI();
     void renderUI(VkCommandBuffer commandBuffer);
     void updateEntities();
-    void renderEntities(VkCommandBuffer commandBuffer);
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void renderEntitiesGeometry(VkCommandBuffer commandBuffer);
+    void transitionGBufferForReading(VkCommandBuffer commandBuffer);
+    void renderDeferredLighting(VkCommandBuffer commandBuffer);
+    void renderComposite(VkCommandBuffer commandBuffer);
+    void recordDeferredCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex);
     void createColorResources();
     void createDepthResources();
-    void createFramebuffers();
     int rateDeviceSuitability(VkPhysicalDevice device);
     VkSampleCountFlagBits getMaxUsableSampleCount();
     bool checkValidationLayerSupport();
@@ -127,16 +143,48 @@ private:
     VkQueue presentQueue{};
     VkSurfaceKHR surface{};
     VkSwapchainKHR swapChain{};
-    std::vector<VkImage> swapChainImages;
-    std::vector<VkImageView> swapChainImageViews;
+    std::vector<VkImage> swapChainImages{};
+    std::vector<VkImageView> swapChainImageViews{};
+    std::vector<VkDeviceMemory> swapChainImageMemory{};
+    VkImage gBufferAlbedoImage{};
+    VkDeviceMemory gBufferAlbedoMemory{};
+    VkImageView gBufferAlbedoView{};
+    VkImage gBufferNormalImage{};
+    VkDeviceMemory gBufferNormalMemory{};
+    VkImageView gBufferNormalView{};
+    VkImage gBufferMaterialImage{};
+    VkDeviceMemory gBufferMaterialMemory{};
+    VkImageView gBufferMaterialView{};
+    VkImage gBufferDepthImage{};
+    VkDeviceMemory gBufferDepthMemory{};
+    VkImageView gBufferDepthView{};
+    VkImage lightingImage{};
+    VkDeviceMemory lightingMemory{};
+    VkImageView lightingView{};
+    VkImage ssrImage{};
+    VkDeviceMemory ssrMemory{};
+    VkImageView ssrView{};
+    VkPipeline ssrComputePipeline{};
+    VkPipelineLayout ssrPipelineLayout{};
+    VkDescriptorSetLayout ssrDescriptorSetLayout{};
+    VkDescriptorPool ssrDescriptorPool{};
+    std::vector<VkDescriptorSet> ssrDescriptorSets{};
+    std::vector<VkDescriptorSet> lightingDescriptorSets{};
+    std::vector<VkDescriptorSet> compositeDescriptorSets{};
+    std::vector<VkFramebuffer> gBufferFramebuffers;
+    std::vector<VkFramebuffer> lightingFramebuffers;
+    std::vector<VkFramebuffer> compositeFramebuffers;
     std::vector<VkFramebuffer> swapChainFramebuffers;
-    VkRenderPass renderPass{};
+    VkRenderPass gBufferRenderPass{};
+    VkRenderPass lightingRenderPass{};
+    VkRenderPass compositeRenderPass{};
     VkFormat swapChainImageFormat{};
     VkExtent2D swapChainExtent{};
     VkPipelineLayout pipelineLayout{};
     VkPipeline graphicsPipeline{};
     VkCommandPool commandPool{};
     VkSampler textureSampler{};
+    VkSampler gBufferSampler{};
     std::vector<VkCommandBuffer> commandBuffers;
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;

@@ -43,7 +43,7 @@ void Model::loadFromFile(const std::string& path) {
         std::cerr << "No primitives found in mesh: " << mesh.name << std::endl;
         return;
     }
-    constexpr std::size_t floatsPerVertex = 8; // position (3) + normal (3) + uv (2)
+    constexpr std::size_t floatsPerVertex = 11; // position (3) + normal (3) + uv (2) + tangent (3)
     for (const auto& primitive : mesh.primitives) {
         if (!primitive.indicesAccessor.has_value()) {
             std::cerr << "Primitive missing index accessor in glTF file: " << path << std::endl;
@@ -62,11 +62,14 @@ void Model::loadFromFile(const std::string& path) {
         vertices.resize(vertices.size() + vertexCount * floatsPerVertex, 0.0f);
         for (std::size_t i = 0; i < vertexCount; ++i) {
             const std::size_t base = startFloat + i * floatsPerVertex;
-            vertices[base + 3] = 0.0f;
-            vertices[base + 4] = 0.0f;
-            vertices[base + 5] = 1.0f;
-            vertices[base + 6] = 0.0f;
-            vertices[base + 7] = 0.0f;
+            vertices[base + 3] = 0.0f;  // normal.x
+            vertices[base + 4] = 0.0f;  // normal.y
+            vertices[base + 5] = 1.0f;  // normal.z
+            vertices[base + 6] = 0.0f;  // uv.x
+            vertices[base + 7] = 0.0f;  // uv.y
+            vertices[base + 8] = 1.0f;  // tangent.x
+            vertices[base + 9] = 0.0f;  // tangent.y
+            vertices[base + 10] = 0.0f; // tangent.z
         }
         indices.reserve(indices.size() + indexAccessor.count);
         fastgltf::iterateAccessor<std::uint32_t>(gltf, gltf.accessors[primitive.indicesAccessor.value()],
@@ -100,6 +103,62 @@ void Model::loadFromFile(const std::string& path) {
                     vertices[base + 6] = uv.x;
                     vertices[base + 7] = uv.y;
                 });
+        }
+        bool hasTangents = false;
+        const auto tangentAttr = primitive.findAttribute("TANGENT");
+        if (tangentAttr != primitive.attributes.end()) {
+            const fastgltf::Accessor& tangentAccessor = gltf.accessors[tangentAttr->accessorIndex];
+            fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, tangentAccessor,
+                [&](glm::vec4 t, std::size_t index) {
+                    const std::size_t base = startFloat + index * floatsPerVertex;
+                    vertices[base + 8] = t.x;
+                    vertices[base + 9] = t.y;
+                    vertices[base + 10] = t.z;
+                });
+            hasTangents = true;
+        }
+        if (!hasTangents) {
+            std::vector<glm::vec3> tangents(vertexCount, glm::vec3(0.0f));
+            for (std::size_t i = initialVertexCount * 3; i < indices.size(); i += 3) {
+                const uint32_t i0 = indices[i] - static_cast<uint32_t>(initialVertexCount);
+                const uint32_t i1 = indices[i + 1] - static_cast<uint32_t>(initialVertexCount);
+                const uint32_t i2 = indices[i + 2] - static_cast<uint32_t>(initialVertexCount);
+                if (i0 >= vertexCount || i1 >= vertexCount || i2 >= vertexCount) continue;
+                const std::size_t b0 = startFloat + i0 * floatsPerVertex;
+                const std::size_t b1 = startFloat + i1 * floatsPerVertex;
+                const std::size_t b2 = startFloat + i2 * floatsPerVertex;
+                const glm::vec3 v0(vertices[b0], vertices[b0 + 1], vertices[b0 + 2]);
+                const glm::vec3 v1(vertices[b1], vertices[b1 + 1], vertices[b1 + 2]);
+                const glm::vec3 v2(vertices[b2], vertices[b2 + 1], vertices[b2 + 2]);
+                const glm::vec2 uv0(vertices[b0 + 6], vertices[b0 + 7]);
+                const glm::vec2 uv1(vertices[b1 + 6], vertices[b1 + 7]);
+                const glm::vec2 uv2(vertices[b2 + 6], vertices[b2 + 7]);
+                const glm::vec3 edge1 = v1 - v0;
+                const glm::vec3 edge2 = v2 - v0;
+                const glm::vec2 deltaUV1 = uv1 - uv0;
+                const glm::vec2 deltaUV2 = uv2 - uv0;
+                const float det = deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x;
+                glm::vec3 tangent(1.0f, 0.0f, 0.0f);
+                if (std::abs(det) > 1e-6f) {
+                    const float invDet = 1.0f / det;
+                    tangent = (edge1 * deltaUV2.y - edge2 * deltaUV1.y) * invDet;
+                }
+                tangents[i0] += tangent;
+                tangents[i1] += tangent;
+                tangents[i2] += tangent;
+            }
+            for (std::size_t i = 0; i < vertexCount; ++i) {
+                const std::size_t base = startFloat + i * floatsPerVertex;
+                glm::vec3 n(vertices[base + 3], vertices[base + 4], vertices[base + 5]);
+                glm::vec3 t = tangents[i];
+                t = glm::normalize(t - n * glm::dot(n, t));
+                if (glm::length(t) < 0.001f) {
+                    t = glm::vec3(1.0f, 0.0f, 0.0f);
+                }
+                vertices[base + 8] = t.x;
+                vertices[base + 9] = t.y;
+                vertices[base + 10] = t.z;
+            }
         }
     }
     boundsMin = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);

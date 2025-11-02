@@ -2,7 +2,10 @@
 
 layout(location = 0) in vec3 vDir;
 layout(binding = 1) uniform samplerCube skyboxTex;
-layout(location = 0) out vec4 FragColor;
+
+layout(location = 0) out vec4 outAlbedo;
+layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outMaterial;
 
 const float kExposure = 0.2;
 const float kContrast = 5.0;
@@ -25,7 +28,10 @@ void main() {
     mapped = clamp(mapped, 0.0, 1.0);
     mapped = pow(mapped, vec3(max(kContrast, 1e-3)));
     mapped = pow(mapped, vec3(1.0 / kGamma));
-    FragColor = vec4(mapped, 1.0);
+    
+    outAlbedo = vec4(mapped, 1.0);
+    vec3 skyNormal = normalize(dir);
+    outNormal = vec4(skyNormal * 0.5 + 0.5, 1.0);
+    outMaterial = vec4(0.0, 0.1, 0.0, 1.0);
 }
-
 

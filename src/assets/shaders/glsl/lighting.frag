@@ -1,18 +1,29 @@
 #version 450
-layout(location = 0) in vec3 FragPos;
-layout(location = 1) in vec3 normalVec;
-layout(location = 2) in vec2 texCoord;
-layout(location = 3) in vec3 camPos;
+
+layout(location = 0) in vec2 texCoord;
+
+layout(binding = 0) uniform sampler2D gBufferAlbedo;
+layout(binding = 1) uniform sampler2D gBufferNormal;
+layout(binding = 2) uniform sampler2D gBufferMaterial;
+layout(binding = 3) uniform sampler2D gBufferDepth;
 
 const float PI = 3.14159265358979323846;
 
-layout(binding = 1) uniform sampler2D albedoMap;
-layout(binding = 2) uniform sampler2D metallicMap;
-layout(binding = 3) uniform sampler2D roughnessMap;
-layout(binding = 4) uniform sampler2D normalMap;
+layout(push_constant) uniform PushConstants {
+    mat4 invView;
+    mat4 invProj;
+    vec3 cameraPos;
+} pc;
 
 layout(location = 0) out vec4 FragColor;
 
+vec3 reconstructPosition(vec2 uv, float depth) {
+    vec4 clipSpace = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    vec4 viewSpace = pc.invProj * clipSpace;
+    viewSpace /= viewSpace.w;
+    vec4 worldSpace = pc.invView * viewSpace;
+    return worldSpace.xyz;
+}
 vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
     cosTheta = clamp(cosTheta, 0.0, 1.0);
     return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
@@ -39,19 +50,6 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness){
     float ggx2 = GeometrySchlickGGX(NdotV, roughness);
     return ggx1 * ggx2;
 }
-vec3 getNormalFromMap(){
-    vec3 tangent = texture(normalMap, texCoord).xyz * 2.0 - 1.0;
-    vec3 Q1 = dFdx(FragPos);
-    vec3 Q2 = dFdy(FragPos);
-    vec2 st1 = dFdx(texCoord);
-    vec2 st2 = dFdy(texCoord);
-    vec3 N = normalize(normalVec);
-    vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
-    T = normalize(T - dot(T, N) * N);
-    vec3 B = cross(N, T);
-    mat3 TBN = mat3(T, B, N);
-    return normalize(TBN * tangent);
-}
 float specularAntiAliasing(vec3 normal, float roughness){
     vec3 dndu = dFdx(normal);
     vec3 dndv = dFdy(normal);
@@ -59,19 +57,24 @@ float specularAntiAliasing(vec3 normal, float roughness){
     float kernelRoughness = min(2.0 * variance, 1.0);
     return clamp(roughness + kernelRoughness, 0.0, 1.0);
 }
-void main(){
-    vec4 baseColor = texture(albedoMap, texCoord);
-    vec3 albedo = pow(baseColor.rgb, vec3(2.2));
-    float alpha = baseColor.a;
 
-    float metallic = texture(metallicMap, texCoord).r;
+void main() {
+    vec3 albedo = texture(gBufferAlbedo, texCoord).rgb;
+    float alpha = texture(gBufferAlbedo, texCoord).a;
+    vec3 N = texture(gBufferNormal, texCoord).xyz * 2.0 - 1.0;
+    vec4 material = texture(gBufferMaterial, texCoord);
+    float metallic = material.r;
+    float baseRoughness = material.g;
 
-    float mask = texture(metallicMap, texCoord).a;
-    if (mask < 0.2) discard;
-
-    vec3 N = getNormalFromMap();
-    vec3 V = normalize(camPos - FragPos);
-    float baseRoughness = max(texture(roughnessMap, texCoord).r, 0.05);
+    float depth = texture(gBufferDepth, texCoord).r;
+    if (depth >= 0.9999) {
+        FragColor = vec4(albedo, 1.0);
+        return;
+    }
+    
+    vec3 fragPos = reconstructPosition(texCoord, depth);
+    vec3 V = normalize(pc.cameraPos - fragPos);
+    
     float roughness = specularAntiAliasing(N, baseRoughness);
     roughness = clamp(roughness, 0.05, 1.0);
     float dNdX = length(dFdx(N)),  dNdY = length(dFdy(N));
@@ -98,7 +101,6 @@ void main(){
     vec4 diffuse = vec4(kD * albedo, alpha);
 
     vec3 radiance = NdotL * vec3(3.0);
-
 
     vec3 L2 = normalize(vec3(1.0, -0.5, 1.0));
     vec3 H2 = normalize(V + L2);

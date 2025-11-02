@@ -124,7 +124,7 @@ void Entity::loadTextures() {
     const int fragmentBindingCount = std::max(shaderUsed->fragmentBitBindings, 0);
     std::vector<Image*> textureResources;
     if (texMgr && fragmentBindingCount > 0) {
-        if (shader == "pbr") {
+        if (shader == "gbuffer") {
             static const std::array<std::string, 4> defaultTextures = {
                 "materials_default_albedo", "materials_default_metallic", "materials_default_roughness", "materials_default_normal"
             };

@@ -64,7 +64,7 @@ public:
 
 private:
     std::string name;
-    std::string shader = "pbr";
+    std::string shader = "gbuffer";
     std::vector<std::string> textures;
     std::vector<VkDescriptorSet> descriptorSets;
     std::vector<VkBuffer> uniformBuffers;

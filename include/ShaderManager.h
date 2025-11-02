@@ -37,6 +37,19 @@ struct alignas(16) UniformBufferObject {
     float padding;
 };
 
+struct alignas(16) LightingPushConstants {
+    glm::mat4 invView;
+    glm::mat4 invProj;
+    glm::vec3 cameraPos;
+};
+
+struct alignas(16) SSRPushConstants {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 invView;
+    glm::mat4 invProj;
+};
+
 class ShaderManager {
 private:
     std::unordered_map<std::string, Shader> shaders;

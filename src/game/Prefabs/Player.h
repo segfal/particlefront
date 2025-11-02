@@ -8,7 +8,7 @@
 class Player : public CharacterEntity {
 public:
     Player(const glm::vec3& position = {0.0f, 0.0f, 0.0f}, const glm::vec3& rotation = {0.0f, 0.0f, 0.0f})
-        : CharacterEntity("player", "pbr", position, rotation) {
+        : CharacterEntity("player", "gbuffer", position, rotation) {
             playerCamera = new Camera({0.0f, 1.6f, 0.0f}, {0.0f, rotation.y, 0.0f}, 70.0f);
             this->addChild(playerCamera);
             OBBCollider* box = new OBBCollider({0.0f, 0.6f, 0.0f}, {0.0f, 0.0f, 0.0f}, this->getName(), {0.5f, 1.8f, 0.5f});
