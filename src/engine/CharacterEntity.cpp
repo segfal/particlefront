@@ -23,7 +23,10 @@ void CharacterEntity::update(float deltaTime) {
     }
     velocity.x = desiredVel.x;
     velocity.z = desiredVel.z;
-    velocity.y -= 9.81f * deltaTime;
+    
+    if (!grounded || velocity.y > 0.0f) {
+        velocity.y -= 9.81f * deltaTime;
+    }
 
     // Substep integration to prevent tunneling through thin objects
     const float MAX_STEP_DIST = 0.25f;
@@ -35,9 +38,28 @@ void CharacterEntity::update(float deltaTime) {
     bool touchedGroundThisFrame = false;
     glm::vec3 groundNormalAccum(0.0f);
     constexpr float kSkin = 0.002f; // small separation to avoid re-colliding due to numerical error
+    constexpr float kMinVerticalVel = 1e-4f; // threshold for considering velocity.y as zero
+    
     for (int i = 0; i < steps; ++i) {
         glm::vec3 vStep(0.0f, velocity.y * subDt, 0.0f);
-        if (vStep.y != 0.0f) {
+        
+        if (std::abs(vStep.y) < kMinVerticalVel && !touchedGroundThisFrame) {
+            const float kGroundProbe = 0.02f;
+            collision gcol = willCollide(glm::vec3(0.0f, -kGroundProbe, 0.0f));
+            if (gcol.other) {
+                float glen = glm::length(gcol.mtv);
+                if (glen > 1e-5f) {
+                    glm::vec3 gn = gcol.mtv / glen;
+                    if (gn.y > groundedNormalThreshold) {
+                        touchedGroundThisFrame = true;
+                        groundNormalAccum += gn;
+                        if (velocity.y < 0.0f) velocity.y = 0.0f;
+                    }
+                }
+            }
+        }
+        
+        if (std::abs(vStep.y) >= kMinVerticalVel) {
             collision vcol = willCollide(vStep);
             if (!vcol.other) {
                 setPosition(getPosition() + vStep);
@@ -57,21 +79,7 @@ void CharacterEntity::update(float deltaTime) {
                 }
             }
         }
-        if (vStep.y == 0.0f) {
-            const float kGroundProbe = 0.02f;
-            collision gcol = willCollide(glm::vec3(0.0f, -kGroundProbe, 0.0f));
-            if (gcol.other) {
-                float glen = glm::length(gcol.mtv);
-                if (glen > 1e-5f) {
-                    glm::vec3 gn = gcol.mtv / glen;
-                    if (gn.y > groundedNormalThreshold) {
-                        touchedGroundThisFrame = true;
-                        groundNormalAccum += gn;
-                        if (velocity.y < 0.0f) velocity.y = 0.0f;
-                    }
-                }
-            }
-        }
+        
         glm::vec3 hStep(velocity.x * subDt, 0.0f, velocity.z * subDt);
         if (hStep.x != 0.0f || hStep.z != 0.0f) {
             if (touchedGroundThisFrame) {
@@ -116,6 +124,9 @@ void CharacterEntity::update(float deltaTime) {
     if (touchedGroundThisFrame) {
         grounded = true;
         groundedTimer = 0.0f;
+        if (velocity.y < 0.0f) {
+            velocity.y = 0.0f;
+        }
     } else {
         grounded = groundedTimer <= coyoteTime;
         groundedTimer += deltaTime;
