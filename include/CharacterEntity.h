@@ -24,10 +24,14 @@ public:
     void jump();
     void resetVelocity();
     void rotate(const glm::vec3& delta);
+    void setMoveSpeed(float speed) { moveSpeed = speed; }
+    float getMoveSpeed() const { return moveSpeed; }
+protected:
+    collision willCollide(const glm::vec3& deltaPos, const glm::vec3& deltaRot = glm::vec3(0.0f));
 private:
     glm::vec3 velocity = glm::vec3(0.0f);
     glm::vec3 pressed = glm::vec3(0.0f);
-    const float moveSpeed = 10.0f;
+    float moveSpeed = 10.0f;
     const float jumpSpeed = 10.0f;
     const float groundedNormalThreshold = 0.5f;
     const float coyoteTime = 0.10f;
@@ -40,6 +44,4 @@ private:
         if (a.min.z > b.max.z + margin || a.max.z < b.min.z - margin) return false;
         return true;
     }
-
-    collision willCollide(const glm::vec3& deltaPos, const glm::vec3& deltaRot = glm::vec3(0.0f));
 };

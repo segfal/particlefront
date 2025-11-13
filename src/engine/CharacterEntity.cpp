@@ -137,9 +137,26 @@ void CharacterEntity::update(float deltaTime) {
 }
 void CharacterEntity::move(const glm::vec3& delta) {
     pressed += delta;
+
+    // Debug logging for movement tracking
+    glm::vec3 pos = getPosition();
+    std::cout << "[" << this->getName() << "] move() called\n"
+              << "  Delta: X=" << delta.x << " Y=" << delta.y << " Z=" << delta.z << "\n"
+              << "  Pressed: X=" << pressed.x << " Y=" << pressed.y << " Z=" << pressed.z << "\n"
+              << "  Position: X=" << pos.x << " Y=" << pos.y << " Z=" << pos.z
+              << std::endl;
 }
 void CharacterEntity::stopMove(const glm::vec3& delta) {
     pressed -= delta;
+
+    // Debug logging for movement tracking
+    glm::vec3 pos = getPosition();
+    std::cout << "[" << this->getName() << "] stopMove() called\n"
+              << "  Delta: X=" << delta.x << " Y=" << delta.y << " Z=" << delta.z << "\n"
+              << "  Pressed: X=" << pressed.x << " Y=" << pressed.y << " Z=" << pressed.z << "\n"
+              << "  Position: X=" << pos.x << " Y=" << pos.y << " Z=" << pos.z
+              << std::endl;
+
     if (glm::length(pressed) < 0.001f) {
         resetVelocity();
     }
