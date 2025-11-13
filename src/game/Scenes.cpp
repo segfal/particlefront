@@ -18,6 +18,7 @@
 #include <Skybox.h>
 #include <utils.h>
 #include "Scenes.h"
+#include "Prefabs/Enemy.h"
 
 #define PI 3.14159265358979323846
 
@@ -72,15 +73,16 @@ void Scene1() {
     floorBox->setVerticesInterleaved(modelMgr->getModel("ground-collider")->getVertices(), 11, 0, modelMgr->getModel("ground-collider")->getIndices(), {0.0f, 0.0f, 0.0f});
     floor->addChild(floorBox);
     entityMgr->addEntity("floor", floor);
+    Enemy* enemy1 = new Enemy({10.0f, 2.0f, -5.0f}, {0.0f, 0.0f, 0.0f});
+    entityMgr->addEntity("enemy", enemy1);
+    
 
     Entity* walls = new Entity("walls", "gbuffer", {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.2f, 1.2f, 1.2f}, {"materials_walls_albedo", "materials_walls_metallic", "materials_walls_roughness", "materials_walls_normal"});
     walls->setModel(ModelManager::getInstance()->getModel("walls"));
     entityMgr->addEntity("walls", walls);
-
     Player* player = new Player({16.0f, 10.0f, -9.0f}, {0.0f, 0.0f, 0.0f});
     
     entityMgr->addEntity("skybox", skybox);
-
     entityMgr->addEntity("player", player);
 }
 
